@@ -1,0 +1,27 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# 编译、发布目录
+**/bin/
+**/obj/
+**/publish/
+artifacts/
+
+# NuGet
+packages/
+*.nupkg
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+
+# 临时文件和日志
+*.tmp
+*.log
+
+# 本地运行数据
+settings.json
+playlist.json
+playback-history.json

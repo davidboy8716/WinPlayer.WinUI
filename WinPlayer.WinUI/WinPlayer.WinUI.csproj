@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>WinPlayer.WinUI</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <Nullable>enable</Nullable>
+    <!-- “in”是旧发布目录的拼写错误；将其排除，避免残留二进制文件被写入 PRI。 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;in\**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="Images\player.ico">
+      <!-- AppWindow.SetIcon 在运行时读取该文件，因此发布时必须将其放在可执行文件旁。 -->
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="Images\player.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+    <!-- 发布属性 -->
+  <PropertyGroup>
+    <!-- WinUI/XAML 和 JSON 持久化服务依赖反射元数据，因此不启用裁剪。 -->
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
+    <Optimize Condition="'$(Configuration)' == 'Release'">true</Optimize>
+    <ApplicationIcon>Images\player.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <Target Name="CopyWinUiResourcesToPublishDirectory" AfterTargets="Publish">
+    <ItemGroup>
+      <WinUiPublishResource Include="$(TargetDir)App.xbf" Condition="Exists('$(TargetDir)App.xbf')" />
+      <WinUiPublishResource Include="$(TargetDir)MainWindow.xbf" Condition="Exists('$(TargetDir)MainWindow.xbf')" />
+      <WinUiPublishResource Include="$(TargetDir)$(AssemblyName).pri" Condition="Exists('$(TargetDir)$(AssemblyName).pri')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WinUiPublishResource)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
