@@ -147,7 +147,7 @@
                                           AutomationProperties.Name="libmpv 杜比视界引擎" />
                         </controls:SettingsCard>
                         <controls:SettingsCard Header="外部播放器"
-                                               Description="填写支持杜比视界的播放器完整路径（如 mpv.exe 或完美解码中的 PotPlayerMini64.exe）。本机系统解码无法呈现杜比视界 Profile 5 时，可用右键菜单把当前媒体交给它播放">
+                                               Description="填写支持杜比视界的播放器完整路径（如 mpv.exe 或完美解码中的 PotPlayerMini64.exe）。本机系统解码无法呈现杜比视界 Profile 5 时，可用该播放器打开当前文件">
                             <TextBox x:Name="ExternalPlayerPathBox" Width="360"
                                      PlaceholderText="C:\Path\To\mpv.exe"
                                      AutomationProperties.Name="外部播放器路径" />
