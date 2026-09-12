@@ -27,6 +27,20 @@ Windows 原生媒体框架，自己专注在**播放体验与界面**上：无�
 项目采用 MVVM 组织代码，界面层（`MainWindow` / `SettingsWindow`）只负责渲染与交互，
 播放状态、播放列表、持久化与系统集成都收敛在 `ViewModels` 与 `Services` 中。
 
+## 界面预览
+
+主界面：视频画面铺满窗口，标题栏、媒体文件夹、播放列表与控制栏都是悬浮的毛玻璃面板。
+
+<p align="center">
+  <img src="docs/screenshots/main.png" alt="WinPlayer.WinUI 主界面" width="760">
+</p>
+
+选项窗口：独立窗口，不随主窗口缩小而被裁切（图中处于隐私模式，因此设置保存到 `settings.b.json`）。
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="WinPlayer.WinUI 选项窗口" width="600">
+</p>
+
 ## 功能特性
 
 **播放**

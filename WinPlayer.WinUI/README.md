@@ -2,7 +2,7 @@
 
 WinPlayer.WinUI 是一个基于 **WinUI 3** 和 Windows 原生 `MediaPlayer` 的桌面媒体播放器。项目采用 MVVM 组织主要播放逻辑，界面以视频画面为背景，标题栏、媒体文件夹、播放列表和控制栏以悬浮毛玻璃面板呈现。
 
-> 本文是**完整使用说明**。仓库首页概览见 [`../README.md`](../README.md)；
+> 本文是**完整使用说明**。仓库首页概览与界面截图见 [`../README.md`](../README.md)；
 > 开发环境、代码风格与提交约定见 [`../CONTRIBUTING.md`](../CONTRIBUTING.md)；
 > 普通 / 隐私双模式隔离的设计见 [`docs/双模式隔离-开发方案.md`](docs/双模式隔离-开发方案.md)；
 > 图标与图片资源说明见 [`docs/Images资源说明.md`](docs/Images资源说明.md)。
