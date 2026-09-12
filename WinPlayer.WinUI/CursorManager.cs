@@ -6,22 +6,6 @@ namespace WinPlayer.WinUI;
 
 /// <summary>
 /// 统一管理当前窗口鼠标指针的显示与隐藏。
-///
-/// 背景：Windows App SDK 2.2 / InteractiveExperiences 2.0 中，客户端指针由输入栈在
-/// 独立于 UI 线程的上下文中持续管理：UI 线程上的 ShowCursor/SetCursor/WM_SETCURSOR，
-/// 以及 UIElement.ProtectedCursor 都不会改变实际显示（箭头句柄恒为系统标准箭头并被
-/// 逐帧重设）。
-///
-/// 因此本类采用唯一有效的 OS 级手段：隐藏时用 SetSystemCursor 把**全部系统光标形状**
-/// （箭头、文本 I 型、手型、调整大小、十字、忙碌等，见 <see cref="SystemCursorIds"/>）
-/// 临时替换为全透明光标（Cursors/blank.cur）。此后无论哪条线程绘制哪种形状，画出来的
-/// 都是透明 → 指针在任何形态下都不可见；恢复时用 SPI_SETCURSORS 按当前主题重新加载
-/// 整套系统光标。替换期间若指针离开本窗口（移到其他程序/任务栏），会自动临时还原，
-/// 避免把别的程序的指针也变没；指针回到本窗口再恢复隐藏。
-///
-/// 注意：只替换"标准箭头"是不够的——指针移到文本框、链接、调整大小区域时会切成别的
-/// 形状，那些形状仍是可见的。该方案影响的是系统光标的显示映射，是本栈上唯一能真正隐藏
-/// 指针的途径；隐藏期间若进程异常退出，可在系统"鼠标指针设置"里点"恢复默认"还原。
 /// </summary>
 public sealed class CursorManager
 {

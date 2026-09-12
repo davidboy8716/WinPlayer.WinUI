@@ -11,12 +11,6 @@
                 <!-- 其他合并资源字典可添加到此处。 -->
             </ResourceDictionary.MergedDictionaries>
 
-            <!--
-                播放器外观色板：主窗口与设置窗口共用，保证两窗口风格一致。
-                这里的配色刻意在浅色主题下也保持深色（参照系统媒体播放器：覆盖在画面上的
-                悬浮面板在浅色主题下依然深色），因此 Light 与 Dark 使用同一套值；
-                高对比度下改用系统颜色，并让蒙层透明以免遮挡系统配色。
-            -->
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="PlayerChromeTextBrush" Color="#FFFFFFFF" />

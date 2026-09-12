@@ -20,18 +20,6 @@ namespace WinPlayer.WinUI;
 
 /// <summary>
 /// 独立的播放器设置窗口。
-///
-/// <para>
-/// 之所以是独立窗口而不是浮在主窗口上的对话框：对话框尺寸受主窗口限制，
-/// 主窗口较小时设置项会被裁掉。这里窗口自带尺寸、内容区始终可滚动，
-/// 主窗口再小也能完整访问全部选项。
-/// </para>
-///
-/// <para>
-/// 界面只编辑控件中的临时值，用户点“保存更改”后才写回配置对象并触发主窗口应用设置。
-/// 窗口标题与底部状态栏标明当前模式（普通 / 隐私）以及设置落到哪个文件，
-/// 避免误以为改动会影响另一种模式。
-/// </para>
 /// </summary>
 public sealed partial class SettingsWindow : Window
 {
@@ -64,9 +52,9 @@ public sealed partial class SettingsWindow : Window
         Closed += SettingsWindow_Closed;
 
         string modeName = AppMode.IsPrivacy ? "隐私模式" : "普通模式";
-        string settingsFile = AppMode.IsPrivacy ? "settings.b.json" : "settings.json";
-        Title = $"播放器选项 — {modeName}";
-        ModeIndicatorText.Text = $"当前模式：{modeName}　设置保存到 {settingsFile}";
+        //string settingsFile = AppMode.IsPrivacy ? "settings.b.json" : "settings.json";
+        //Title = $"播放器选项 — {modeName}";
+        //ModeIndicatorText.Text = $"当前模式：{modeName}　设置保存到 {settingsFile}";
         ModeChipText.Text = modeName;
         ModeChipIcon.Glyph = AppMode.IsPrivacy ? "\uED1A" : "\uE7F4";
         SettingsRoot.RequestedTheme = ToElementTheme(settings.ThemeMode);
@@ -108,7 +96,6 @@ public sealed partial class SettingsWindow : Window
 
     /// <summary>
     /// 自定义标题栏：与主窗口一致（内容延伸到标题栏 + 透明按钮底色 + 白色按钮字形），
-    /// 这样两窗口的顶部条风格统一，而不是系统默认的灰色标题栏。
     /// </summary>
     private void ApplyCustomTitleBar()
     {
@@ -279,8 +266,6 @@ public sealed partial class SettingsWindow : Window
 
     private async void RegisterAssociationButton_Click(object sender, RoutedEventArgs e)
     {
-        // 隐私模式不修改注册表（见 AppMode 与 docs\双模式隔离-开发方案.md），
-        // 因此这里拒绝注册，而不是让隐私窗口写出一份"看起来像普通模式"的关联。
         if (AppMode.IsPrivacy)
         {
             AssociationStatusText.Text = "隐私模式不修改系统文件关联，请用普通模式注册。";

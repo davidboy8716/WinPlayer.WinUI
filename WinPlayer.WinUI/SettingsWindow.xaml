@@ -9,10 +9,6 @@
     <MicaBackdrop Kind="BaseAlt" />
   </Window.SystemBackdrop>
 
-  <!-- 独立窗口：尺寸由窗口自身决定，主窗口再小也不会把设置项挤掉；
-         内容区始终带滚动条，窗口被拉小时仍可完整访问。
-         顶部使用与主窗口同款的自定义标题栏（深色 chrome + 模式标识），
-         而不是系统默认标题栏，以保持整体风格一致。 -->
   <Grid x:Name="SettingsRoot" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
     <Grid.Resources>
       <Style x:Key="SettingsNumberBoxStyle" TargetType="NumberBox">
@@ -88,13 +84,13 @@
             <FontIcon Glyph="&#xE790;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
           </NavigationViewItem.Icon>
         </NavigationViewItem>
-        <NavigationViewItem Content="记录与启动" Tag="History"
+        <NavigationViewItem Content="启动" Tag="History"
                                     AutomationProperties.Name="记录与启动设置">
           <NavigationViewItem.Icon>
             <FontIcon Glyph="&#xE81C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
           </NavigationViewItem.Icon>
         </NavigationViewItem>
-        <NavigationViewItem Content="诊断日志" Tag="Diagnostics"
+        <NavigationViewItem Content="日志" Tag="Diagnostics"
                                     AutomationProperties.Name="诊断日志">
           <NavigationViewItem.Icon>
             <FontIcon Glyph="&#xE9D9;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
@@ -452,9 +448,6 @@
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <TextBlock x:Name="ModeIndicatorText" VerticalAlignment="Center"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           TextWrapping="Wrap" />
         <Button Grid.Column="1" Content="取消" MinWidth="96"
                         Click="CancelButton_Click"
                         AutomationProperties.Name="取消并关闭" />

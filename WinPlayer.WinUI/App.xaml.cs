@@ -144,7 +144,6 @@ namespace WinPlayer.WinUI
         private async Task ListenForSecondaryInstancesAsync()
         {
             // 每次激活都创建一个只接收单个客户端的管道服务，并通过主窗口的
-            // DispatcherQueue 将界面操作切回 UI 线程。
             while (_window is not null)
             {
                 try
