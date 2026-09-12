@@ -376,7 +376,7 @@ dotnet publish WinPlayer.WinUI.csproj -c Release -p:Platform=x64 -r win-x64 --se
 ### 发布后双击没有反应
 
 1. 确认复制的是完整发布目录。
-2. 检查 `WinPlayer.WinUI.pri`、`App.xbf`、`MainWindow.xbf` 和 `Images\player.ico` 是否存在。
+2. 检查 `WinPlayer.WinUI.pri`、`App.xbf`、`MainWindow.xbf`、`SettingsWindow.xbf` 和 `Images\player.ico` 是否存在。
 3. 查看 `%LOCALAPPDATA%\WinPlayer.WinUI\startup-error.log`。
 4. 确认没有开启裁剪或单文件发布。
 

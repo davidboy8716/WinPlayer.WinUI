@@ -413,7 +413,10 @@ public sealed class PlaybackHistoryService : IDisposable
             AppLogService.Error("PlaybackHistorySaveFailed", "保存播放记录失败",
                 new { Path = path }, ex);
             try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }
-            catch { }
+            catch
+            {
+                // 保存本身已经失败并记录过；这里只是尽力清理临时文件，失败无需再次上报。
+            }
         }
         finally
         {
@@ -580,8 +583,16 @@ public sealed class PlaybackHistoryService : IDisposable
     public void Dispose()
     {
         if (disposed) return;
-        try { FlushAsync().GetAwaiter().GetResult(); }
-        catch { }
+        try
+        {
+            FlushAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            // 退出时最后一次落盘失败意味着这部分播放位置会丢失，值得留一条日志（但不应阻止退出）。
+            AppLogService.Warning("PlaybackHistoryFlushOnDisposeFailed", "退出时保存播放记录失败",
+                exception: ex);
+        }
         disposed = true;
         saveLock.Dispose();
     }

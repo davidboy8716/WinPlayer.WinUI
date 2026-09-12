@@ -35,7 +35,7 @@ namespace WinPlayer.WinUI;
 
 /// <summary>
 /// 承载 WinUI 可视化树，并协调窗口输入、合成渲染、悬浮面板动画、
-/// 对话框以及本机 AppWindow 行为。
+/// 独立设置窗口的打开以及本机 AppWindow 行为。
 /// </summary>
 public sealed partial class MainWindow : Window
 {
