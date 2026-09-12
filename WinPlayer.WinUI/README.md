@@ -205,20 +205,27 @@ WinPlayer.WinUI.exe "Privacy:D:\Media\Example.mkv"
 
 选项窗口（**独立窗口**，标题与底部会标明当前模式及设置文件）目前提供以下设置：
 
-### 界面里的两套「毛玻璃」
+### 界面的半透明效果
 
-程序里有两层来源完全不同的半透明效果，不要混淆：
+程序里只有**一处**真正的毛玻璃（会模糊、会采样），其余几处只是半透明纯色：
 
-| 机制 | 出现在哪 | 采样对象 | 可调 |
+| 位置 | 实现 | 是否模糊 | 采样对象 |
 | --- | --- | --- | --- |
-| 系统 **Mica** 材质 | 主窗口与**选项窗口**的窗口背景（`MainWindow.xaml` 与 `SettingsWindow.xaml` 都设置了 `<MicaBackdrop Kind="BaseAlt" />`） | 桌面壁纸 | 否 |
-| Win2D `BackdropBlurBrush`（`Effects/BackdropBlurBrush.cs`） | **主窗口**的悬浮面板：标题栏、媒体文件夹树、播放列表、控制栏 | **其背后的视频画面** | 是（下面的「毛玻璃模糊强度」「色调不透明度」两项） |
+| 主窗口的悬浮面板（标题栏、媒体文件夹树、播放列表、控制栏） | Win2D `BackdropBlurBrush`（`Effects/BackdropBlurBrush.cs`） | **是** | 其背后的**视频画面** |
+| 选项窗口的标题栏 | 色板中的半透明深色 `PlayerTopFallbackColor` | 否 | 不采样任何内容 |
+| 选项窗口的底部按钮栏 | 系统 `LayerFillColorDefaultBrush`（半透明填充） | 否 | 不采样任何内容 |
 
-所以「直通呈现」所说的「毛玻璃采样不生效」只针对**第二层**：面板不再采样视频。窗口的 Mica 背景与
-选项窗口自身的毛玻璃效果不受影响。
+**选项窗口整体没有毛玻璃效果**：它的窗口背景是不透明的主题画刷（`SettingsWindow.xaml:16` 中
+`SettingsRoot` 的 `ApplicationPageBackgroundThemeBrush`），把底下内容全盖住了。
 
-> Mica 是 Windows 11 的材质。程序虽声明支持 Windows 10 1809 及以上，但 Windows 10 不提供 Mica，
-> 在那类系统上窗口会退回为普通背景。
+> 两个窗口的 XAML 其实都声明了
+> `<Window.SystemBackdrop><MicaBackdrop Kind="BaseAlt" /></Window.SystemBackdrop>`
+> （`MainWindow.xaml:10-12`、`SettingsWindow.xaml:8-10`），但**都看不到效果**：主窗口的根 Grid 是
+> `Background="Black"`（`MainWindow.xaml:14`），选项窗口的根 Grid 是不透明的
+> `ApplicationPageBackgroundThemeBrush`，各自铺满整个客户区，Mica 没有可显示的位置。
+
+下面的「毛玻璃模糊强度」与「色调不透明度」两项只作用于**主窗口面板**那一层，既不影响选项窗口，
+也不能给选项窗口加上毛玻璃。
 
 - 主题：跟随系统 / 浅色 / 深色
 - 自动播放和自动进入全屏
@@ -599,7 +606,8 @@ hwdec=auto-safe    sub-auto=fuzzy    secondary-sid=no    secondary-sub-visibilit
    再对比画面与日志中的降级原因——这是判断“能否进入 HDR”的最直接方式。
 3. 若系统侧同样异常，请确认已安装 HEVC 视频扩展与杜比视界扩展（Microsoft Store）。
    本程序的自绘路径（默认）把帧服务器输出绘制到 8 位表面，HDR 元数据与杜比视界信息在这一步会丢失，
-   因此直通呈现才是 HDR/杜比内容的首选路径（代价是**面板级**毛玻璃采样不生效，即悬浮面板不再采样视频；窗口的 Mica 背景不受影响，详见「[界面里的两套「毛玻璃」](#界面里的两套毛玻璃)」）。
+   因此直通呈现才是 HDR/杜比内容的首选路径（代价是**面板级**毛玻璃采样不生效，即悬浮面板不再
+   采样视频，详见「[界面的半透明效果](#界面的半透明效果)」）。
 4. **若直通呈现下画面依旧发绿/发紫**：说明系统媒体框架没有处理杜比视界的 IPT/RPU 数据
    （Profile 5 单层 IPT 一定会这样，Profile 8 则退化为按 HDR10 基础层显示）。
    此时开启内置的 **libmpv 杜比视界引擎**（选项 → HDR 与杜比视界 → libmpv 杜比视界引擎，

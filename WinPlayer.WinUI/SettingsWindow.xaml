@@ -5,66 +5,66 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls">
 
-    <Window.SystemBackdrop>
-        <MicaBackdrop Kind="BaseAlt" />
-    </Window.SystemBackdrop>
+  <Window.SystemBackdrop>
+    <MicaBackdrop Kind="BaseAlt" />
+  </Window.SystemBackdrop>
 
-    <!-- 独立窗口：尺寸由窗口自身决定，主窗口再小也不会把设置项挤掉；
+  <!-- 独立窗口：尺寸由窗口自身决定，主窗口再小也不会把设置项挤掉；
          内容区始终带滚动条，窗口被拉小时仍可完整访问。
          顶部使用与主窗口同款的自定义标题栏（深色 chrome + 模式标识），
          而不是系统默认标题栏，以保持整体风格一致。 -->
-    <Grid x:Name="SettingsRoot" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Grid.Resources>
-            <Style x:Key="SettingsNumberBoxStyle" TargetType="NumberBox">
-                <Setter Property="Width" Value="150" />
-                <Setter Property="SpinButtonPlacementMode" Value="Compact" />
-                <Setter Property="HorizontalAlignment" Value="Right" />
-            </Style>
+  <Grid x:Name="SettingsRoot" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid.Resources>
+      <Style x:Key="SettingsNumberBoxStyle" TargetType="NumberBox">
+        <Setter Property="Width" Value="150" />
+        <Setter Property="SpinButtonPlacementMode" Value="Compact" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+      </Style>
 
-            <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="13" />
-                <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
-                <Setter Property="Margin" Value="4,12,4,2" />
-            </Style>
-        </Grid.Resources>
+      <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Margin" Value="4,12,4,2" />
+      </Style>
+    </Grid.Resources>
 
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
 
-        <!-- 自定义标题栏：与主窗口顶栏同款（深色 tint + 1px 描边 + 白色文字），
+    <!-- 自定义标题栏：与主窗口顶栏同款（深色 tint + 1px 描边 + 白色文字），
              最右侧 138px 留给系统的最小化/最大化/关闭按钮。 -->
-        <Border x:Name="SettingsTitleBar" Grid.Row="0" Height="52" Padding="14,0"
+    <Border x:Name="SettingsTitleBar" Grid.Row="0" Height="52" Padding="14,0"
                 BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
                 BorderThickness="0,0,0,1"
                 Background="{ThemeResource PlayerTopFallbackColor}">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,138">
-                <Image Source="/images/player.png" Width="30" Height="30"
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,138">
+        <Image Source="/images/player.png" Width="30" Height="30"
                        Margin="0,0,12,0" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="播放器选项" FontSize="15" FontWeight="SemiBold"
+        <TextBlock Grid.Column="1" Text="播放器选项" FontSize="15" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="0,0,12,0"
                            Foreground="{ThemeResource PlayerChromeTextBrush}" />
-                <Border Grid.Column="3" VerticalAlignment="Center"
+        <Border Grid.Column="3" VerticalAlignment="Center"
                         CornerRadius="6" Padding="10,3"
                         BorderThickness="1"
                         BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
                         Background="{ThemeResource PlayerChromeButtonBrush}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon x:Name="ModeChipIcon" Glyph="&#xE7F4;" FontSize="12"
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <FontIcon x:Name="ModeChipIcon" Glyph="&#xE7F4;" FontSize="12"
                                   Foreground="{ThemeResource PlayerChromeTextBrush}"
                                   FontFamily="{ThemeResource SymbolThemeFontFamily}" />
-                        <TextBlock x:Name="ModeChipText" FontSize="12"
+            <TextBlock x:Name="ModeChipText" FontSize="12"
                                    VerticalAlignment="Center"
                                    Foreground="{ThemeResource PlayerChromeTextBrush}" />
-                    </StackPanel>
-                </Border>
-            </Grid>
+          </StackPanel>
         </Border>
+      </Grid>
+    </Border>
 
-        <NavigationView x:Name="SettingsNavigation"
+    <NavigationView x:Name="SettingsNavigation"
                         Grid.Row="1"
                         PaneDisplayMode="Left"
                         OpenPaneLength="178"
@@ -74,343 +74,346 @@
                         IsBackButtonVisible="Collapsed"
                         IsSettingsVisible="False"
                         SelectionChanged="SettingsNavigation_SelectionChanged">
-            <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="PlaybackNavigationItem"
+      <NavigationView.MenuItems>
+        <NavigationViewItem x:Name="PlaybackNavigationItem"
                                     Content="播放" Tag="Playback"
                                     AutomationProperties.Name="播放设置">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE768;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="界面" Tag="Appearance"
+          <NavigationViewItem.Icon>
+            <FontIcon Glyph="&#xE768;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          </NavigationViewItem.Icon>
+        </NavigationViewItem>
+        <NavigationViewItem Content="界面" Tag="Appearance"
                                     AutomationProperties.Name="界面设置">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE790;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="记录与启动" Tag="History"
+          <NavigationViewItem.Icon>
+            <FontIcon Glyph="&#xE790;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          </NavigationViewItem.Icon>
+        </NavigationViewItem>
+        <NavigationViewItem Content="记录与启动" Tag="History"
                                     AutomationProperties.Name="记录与启动设置">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE81C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="诊断日志" Tag="Diagnostics"
+          <NavigationViewItem.Icon>
+            <FontIcon Glyph="&#xE81C;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          </NavigationViewItem.Icon>
+        </NavigationViewItem>
+        <NavigationViewItem Content="诊断日志" Tag="Diagnostics"
                                     AutomationProperties.Name="诊断日志">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE9D9;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-            </NavigationView.MenuItems>
+          <NavigationViewItem.Icon>
+            <FontIcon Glyph="&#xE9D9;" FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+          </NavigationViewItem.Icon>
+        </NavigationViewItem>
+      </NavigationView.MenuItems>
 
-            <Grid Padding="24,8,18,18">
-                <ScrollViewer x:Name="PlaybackSection"
+      <Grid Padding="24,8,18,18">
+        <ScrollViewer x:Name="PlaybackSection"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Spacing="8" Padding="0,0,10,20">
-                        <TextBlock Text="播放" FontSize="24" FontWeight="SemiBold" />
-                        <TextBlock Text="控制媒体打开方式、音量过渡和跳转行为。"
+          <StackPanel Spacing="8" Padding="0,0,10,20">
+            <TextBlock Text="播放" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="控制媒体打开方式、音量过渡和跳转行为。"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" Margin="0,0,0,8" />
 
-                        <TextBlock Text="打开媒体" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="自动播放"
+            <TextBlock Text="打开媒体" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="自动播放"
                                                Description="打开媒体或恢复上次会话后立即开始播放">
-                            <ToggleSwitch x:Name="AutoPlayToggle" OnContent="开" OffContent="关"
+              <ToggleSwitch x:Name="AutoPlayToggle" OnContent="开" OffContent="关"
                                           AutomationProperties.Name="自动播放" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="自动进入全屏"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="自动进入全屏"
                                                Description="媒体成功打开后切换到全屏播放">
-                            <ToggleSwitch x:Name="AutoFullScreenToggle" OnContent="开" OffContent="关"
+              <ToggleSwitch x:Name="AutoFullScreenToggle" OnContent="开" OffContent="关"
                                           AutomationProperties.Name="自动进入全屏" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="单击播放/暂停"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="单击播放/暂停"
                                                Description="单击播放区域切换播放或暂停；关闭后双击仍可切换全屏">
-                            <ToggleSwitch x:Name="ClickToPlayPauseToggle" OnContent="开" OffContent="关"
+              <ToggleSwitch x:Name="ClickToPlayPauseToggle" OnContent="开" OffContent="关"
                                           AutomationProperties.Name="单击播放或暂停" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="默认音量"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="默认音量"
                                                Description="程序启动和恢复会话时使用的音量">
-                            <NumberBox x:Name="VolumeNumber" Minimum="0" Maximum="100"
+              <NumberBox x:Name="VolumeNumber" Minimum="0" Maximum="100"
                                        SmallChange="1" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="默认音量" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="HDR 与杜比视界" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="直通呈现"
+            <TextBlock Text="HDR 与杜比视界" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="直通呈现"
                                                Description="关闭帧服务器自绘，把画面交回系统合成器输出；用于验证 HDR/杜比内容的色彩与 HDR 输出。该模式下毛玻璃采样不生效，图片字幕由独立叠加层绘制">
-                            <ToggleSwitch x:Name="HdrDirectPresentToggle" OnContent="直通" OffContent="自绘"
+              <ToggleSwitch x:Name="HdrDirectPresentToggle" OnContent="直通" OffContent="自绘"
                                           AutomationProperties.Name="HDR 直通呈现" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="libmpv 杜比视界引擎"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="libmpv 杜比视界引擎"
                                                Description="用 libmpv（软件渲染 API + libplacebo 滤镜链）播放，可正确呈现系统媒体框架无法处理的杜比视界 Profile 5。需要程序目录下存在 libmpv-2.dll（开发环境自动使用 .tools/mpv-dev）；开启后所有媒体都由该引擎播放">
-                            <ToggleSwitch x:Name="UseLibMpvEngineToggle" OnContent="启用" OffContent="关闭"
+              <ToggleSwitch x:Name="UseLibMpvEngineToggle" OnContent="启用" OffContent="关闭"
                                           AutomationProperties.Name="libmpv 杜比视界引擎" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="外部播放器"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="外部播放器"
                                                Description="填写支持杜比视界的播放器完整路径（如 mpv.exe 或完美解码中的 PotPlayerMini64.exe）。本机系统解码无法呈现杜比视界 Profile 5 时，可用该播放器打开当前文件">
-                            <TextBox x:Name="ExternalPlayerPathBox" Width="360"
+              <TextBox x:Name="ExternalPlayerPathBox" Width="360"
                                      PlaceholderText="C:\Path\To\mpv.exe"
                                      AutomationProperties.Name="外部播放器路径" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="播放过渡" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="新媒体音量渐入"
+            <TextBlock Text="播放过渡" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="新媒体音量渐入"
                                                Description="切换文件时从静音平滑恢复到目标音量">
-                            <ToggleSwitch x:Name="VolumeFadeToggle" OnContent="开" OffContent="关"
+              <ToggleSwitch x:Name="VolumeFadeToggle" OnContent="开" OffContent="关"
                                           AutomationProperties.Name="新媒体音量渐入" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="渐入时间"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="渐入时间"
                                                Description="音量恢复到目标值所需的秒数">
-                            <NumberBox x:Name="VolumeFadeDurationNumber" Minimum="0.1" Maximum="10"
+              <NumberBox x:Name="VolumeFadeDurationNumber" Minimum="0.1" Maximum="10"
                                        SmallChange="0.1" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="音量渐入时间（秒）" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="跳转" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="快进/快退间隔"
+            <TextBlock Text="跳转" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="快进/快退间隔"
                                                Description="方向键每次跳转的秒数">
-                            <NumberBox x:Name="SeekSecondsNumber" Minimum="1" Maximum="300"
+              <NumberBox x:Name="SeekSecondsNumber" Minimum="1" Maximum="300"
                                        SmallChange="1" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="快进快退间隔（秒）" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="片头结束位置"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="片头结束位置"
                                                Description="从文件开头自动跳过的秒数；0 表示关闭">
-                            <NumberBox x:Name="SkipIntroNumber" Minimum="0" Maximum="3600"
+              <NumberBox x:Name="SkipIntroNumber" Minimum="0" Maximum="3600"
                                        SmallChange="1" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="片头结束位置（秒）" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="片尾提前跳过"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="片尾提前跳过"
                                                Description="距离文件结尾多少秒时播放下一项；0 表示关闭">
-                            <NumberBox x:Name="SkipOutroNumber" Minimum="0" Maximum="3600"
+              <NumberBox x:Name="SkipOutroNumber" Minimum="0" Maximum="3600"
                                        SmallChange="1" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="片尾提前跳过（秒）" />
-                        </controls:SettingsCard>
-                    </StackPanel>
-                </ScrollViewer>
+            </controls:SettingsCard>
+          </StackPanel>
+        </ScrollViewer>
 
-                <ScrollViewer x:Name="AppearanceSection" Visibility="Collapsed"
+        <ScrollViewer x:Name="AppearanceSection" Visibility="Collapsed"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Spacing="8" Padding="0,0,10,20">
-                        <TextBlock Text="界面" FontSize="24" FontWeight="SemiBold" />
-                        <TextBlock Text="调整控制栏行为、侧栏尺寸和播放画面上的毛玻璃层。"
+          <StackPanel Spacing="8" Padding="0,0,10,20">
+            <TextBlock Text="界面" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="调整控制栏行为、侧栏尺寸和播放画面上的毛玻璃层。"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" Margin="0,0,0,8" />
 
-                        <TextBlock Text="主题" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="界面主题"
+            <TextBlock Text="主题" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="界面主题"
                                                Description="切换播放器整体配色：浅色、深色，或跟随系统设置">
-                            <RadioButtons x:Name="ThemeModeRadio" MaxColumns="3"
+              <RadioButtons x:Name="ThemeModeRadio" MaxColumns="3"
                                           SelectionChanged="ThemeModeRadio_SelectionChanged"
                                           AutomationProperties.Name="界面主题">
-                                <x:String>跟随系统</x:String>
-                                <x:String>浅色</x:String>
-                                <x:String>深色</x:String>
-                            </RadioButtons>
-                        </controls:SettingsCard>
+                <x:String>跟随系统</x:String>
+                <x:String>浅色</x:String>
+                <x:String>深色</x:String>
+              </RadioButtons>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="控制栏" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="底部控制栏一直显示"
+            <TextBlock Text="控制栏" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="底部控制栏一直显示"
                                                Description="关闭后，鼠标移出控制区域会延时自动隐藏">
-                            <ToggleSwitch x:Name="KeepControlBarToggle" OnContent="固定" OffContent="自动"
+              <ToggleSwitch x:Name="KeepControlBarToggle" OnContent="固定" OffContent="自动"
                                           AutomationProperties.Name="底部控制栏显示方式" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="自动隐藏延迟"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="自动隐藏延迟"
                                                Description="鼠标移出后等待多少秒隐藏控制栏">
-                            <NumberBox x:Name="AutoHideDelayNumber" Minimum="0.5" Maximum="30"
+              <NumberBox x:Name="AutoHideDelayNumber" Minimum="0.5" Maximum="30"
                                        SmallChange="0.5" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="控制栏自动隐藏延迟（秒）" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="面板动画时长"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="面板动画时长"
                                                Description="侧栏和控制栏滑入、滑出的毫秒数">
-                            <NumberBox x:Name="AnimationDurationNumber" Minimum="100" Maximum="1500"
+              <NumberBox x:Name="AnimationDurationNumber" Minimum="100" Maximum="1500"
                                        SmallChange="50" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="面板动画时长（毫秒）" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="侧栏" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="自动显示显示侧边栏" Description="侧边栏自动或手动显示切换">
-                            <ToggleSwitch x:Name="SetAtuoSlideToggle" OnContent="自动" OffContent="手动"
+            <TextBlock Text="侧栏" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="自动显示显示侧边栏" Description="侧边栏自动或手动显示切换">
+              <ToggleSwitch x:Name="SetAtuoSlideToggle" OnContent="自动" OffContent="手动"
                                             AutomationProperties.Name="侧边栏自动或手动显示切换" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="左侧栏宽度"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="左侧栏宽度"
                                                Description="媒体文件夹面板的默认宽度">
-                            <NumberBox x:Name="LeftSidebarWidthNumber" Minimum="180" Maximum="600"
+              <NumberBox x:Name="LeftSidebarWidthNumber" Minimum="180" Maximum="600"
                                        SmallChange="10" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="左侧栏宽度" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="右侧栏宽度"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="右侧栏宽度"
                                                Description="播放列表面板的默认宽度">
-                            <NumberBox x:Name="RightSidebarWidthNumber" Minimum="180" Maximum="600"
+              <NumberBox x:Name="RightSidebarWidthNumber" Minimum="180" Maximum="600"
                                        SmallChange="10" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="右侧栏宽度" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="字幕" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="本项目字幕"
+            <TextBlock Text="字幕" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="本项目字幕"
                                                Description="关闭后本程序不再绘制自己的字幕（文本浮层与图片字幕），字幕完全交给播放引擎/系统。杜比视界经 libmpv 引擎播放时，片源自带字幕已由引擎渲染，关闭本项可避免两行字幕重合">
-                            <ToggleSwitch x:Name="OwnSubtitlesToggle" OnContent="显示" OffContent="关闭"
+              <ToggleSwitch x:Name="OwnSubtitlesToggle" OnContent="显示" OffContent="关闭"
                                           AutomationProperties.Name="显示本项目字幕" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="字幕字体"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="字幕字体"
                                                Description="选择系统中已经安装的字体；缺少中文字形时系统会自动回退">
-                            <ComboBox x:Name="SubtitleFontFamilyCombo"
+              <ComboBox x:Name="SubtitleFontFamilyCombo"
                                       Width="240" MaxDropDownHeight="320"
                                       HorizontalAlignment="Right"
                                       AutomationProperties.Name="字幕字体" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="字幕基准字号"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="字幕基准字号"
                                                Description="窗口宽度为 1200 时使用的字号；窗口缩放时会按比例调整">
-                            <NumberBox x:Name="SubtitleBaseFontSizeNumber"
+              <NumberBox x:Name="SubtitleBaseFontSizeNumber"
                                        Minimum="12" Maximum="72" SmallChange="1"
                                        Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="字幕基准字号" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="字幕底部位置"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="字幕底部位置"
                                                Description="字幕与播放区域底部的距离，使用播放区域高度百分比">
-                            <NumberBox x:Name="SubtitleBottomOffsetNumber"
+              <NumberBox x:Name="SubtitleBottomOffsetNumber"
                                        Minimum="2" Maximum="50" SmallChange="1"
                                        Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="字幕距底部百分比" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="毛玻璃" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="模糊强度"
+            <TextBlock Text="毛玻璃" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="模糊强度"
                                                Description="悬浮面板采样播放画面后的高斯模糊程度">
-                            <NumberBox x:Name="BlurAmountNumber" Minimum="0" Maximum="100"
+              <NumberBox x:Name="BlurAmountNumber" Minimum="0" Maximum="100"
                                        SmallChange="1" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="毛玻璃模糊强度" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="色调不透明度"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="色调不透明度"
                                                Description="深色蒙层强度，范围为 0 到 1">
-                            <NumberBox x:Name="TintOpacityNumber" Minimum="0" Maximum="1"
+              <NumberBox x:Name="TintOpacityNumber" Minimum="0" Maximum="1"
                                        SmallChange="0.05" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="毛玻璃色调不透明度" />
-                        </controls:SettingsCard>
-                    </StackPanel>
-                </ScrollViewer>
+            </controls:SettingsCard>
+          </StackPanel>
+        </ScrollViewer>
 
-                <ScrollViewer x:Name="HistorySection" Visibility="Collapsed"
+        <ScrollViewer x:Name="HistorySection" Visibility="Collapsed"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Spacing="8" Padding="0,0,10,20">
-                        <TextBlock Text="记录与启动" FontSize="24" FontWeight="SemiBold" />
-                        <TextBlock Text="决定程序启动方式，以及何时保存和恢复播放进度。"
+          <StackPanel Spacing="8" Padding="0,0,10,20">
+            <TextBlock Text="记录与启动" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="决定程序启动方式，以及何时保存和恢复播放进度。"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" Margin="0,0,0,8" />
 
-                        <TextBlock Text="启动" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="单例运行"
+            <TextBlock Text="启动" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="单例运行"
                                                Description="重复启动时把文件转交给现有窗口；下次启动生效">
-                            <ToggleSwitch x:Name="SingleInstanceToggle" OnContent="开" OffContent="关"
+              <ToggleSwitch x:Name="SingleInstanceToggle" OnContent="开" OffContent="关"
                                           AutomationProperties.Name="单例运行" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="文件关联" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="关联的扩展名"
+            <TextBlock Text="文件关联" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="关联的扩展名"
                                                Description="勾选要加入系统“打开方式”的扩展名；点击“注册关联”后生效，选择会随选项保存">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="全选" Click="SelectAllExtensionsButton_Click"
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="全选" Click="SelectAllExtensionsButton_Click"
                                         AutomationProperties.Name="全选扩展名" />
-                                <Button Content="清空" Click="ClearAllExtensionsButton_Click"
+                <Button Content="清空" Click="ClearAllExtensionsButton_Click"
                                         AutomationProperties.Name="清空扩展名选择" />
-                            </StackPanel>
-                        </controls:SettingsCard>
-                        <VariableSizedWrapGrid x:Name="ExtensionList" Orientation="Horizontal"
+              </StackPanel>
+            </controls:SettingsCard>
+            <VariableSizedWrapGrid x:Name="ExtensionList" Orientation="Horizontal"
                                                MaximumRowsOrColumns="4" ItemWidth="104" ItemHeight="36"
                                                Margin="10,2,10,6" />
-                        <controls:SettingsCard Header="注册文件关联"
+            <controls:SettingsCard Header="注册文件关联"
                                                Description="把上面勾选的扩展名加入系统“打开方式”。注册不会改变现有默认程序，双击打开需在系统默认应用中选择本播放器">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button x:Name="RegisterAssociationButton" Content="注册关联"
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="RegisterAssociationButton" Content="注册关联"
                                         Click="RegisterAssociationButton_Click"
                                         AutomationProperties.Name="注册文件关联" />
-                                <Button x:Name="UnregisterAssociationButton" Content="移除关联"
+                <Button x:Name="UnregisterAssociationButton" Content="移除关联"
                                         Click="UnregisterAssociationButton_Click"
                                         AutomationProperties.Name="移除文件关联" />
-                            </StackPanel>
-                        </controls:SettingsCard>
-                        <TextBlock x:Name="AssociationStatusText" Margin="8,0,8,4" FontSize="12"
+              </StackPanel>
+            </controls:SettingsCard>
+            <TextBlock x:Name="AssociationStatusText" Margin="8,0,8,4" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" />
-                        <controls:SettingsCard Header="系统默认应用"
+            <controls:SettingsCard Header="系统默认应用"
                                                Description="打开 Windows 设置，按文件类型把本播放器设为默认程序，之后双击文件即可直接播放">
-                            <Button Content="打开系统设置" Click="OpenDefaultAppsSettingsButton_Click"
+              <Button Content="打开系统设置" Click="OpenDefaultAppsSettingsButton_Click"
                                     AutomationProperties.Name="打开系统默认应用设置" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="播放记录" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard Header="保存播放位置"
+            <TextBlock Text="播放记录" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard Header="保存播放位置"
                                                Description="关闭或切换媒体时记录当前播放进度">
-                            <ToggleSwitch x:Name="SavePositionToggle" OnContent="开" OffContent="关"
+              <ToggleSwitch x:Name="SavePositionToggle" OnContent="开" OffContent="关"
                                           AutomationProperties.Name="保存播放位置" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="恢复播放位置"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="恢复播放位置"
                                                Description="再次打开媒体时回到上次停止的位置">
-                            <ToggleSwitch x:Name="ResumePositionToggle" OnContent="开" OffContent="关"
+              <ToggleSwitch x:Name="ResumePositionToggle" OnContent="开" OffContent="关"
                                           AutomationProperties.Name="恢复播放位置" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="记录保留天数"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="记录保留天数"
                                                Description="超过此期限的播放记录会被自动清理">
-                            <NumberBox x:Name="HistoryRetentionNumber" Minimum="1" Maximum="3650"
+              <NumberBox x:Name="HistoryRetentionNumber" Minimum="1" Maximum="3650"
                                        SmallChange="1" Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="播放记录保留天数" />
-                        </controls:SettingsCard>
-                        <controls:SettingsCard Header="播放记录最大数量"
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="播放记录最大数量"
                                                Description="超过上限时自动删除更新时间最早的记录；默认 2,000 条">
-                            <NumberBox x:Name="MaxHistoryEntriesNumber"
+              <NumberBox x:Name="MaxHistoryEntriesNumber"
                                        Minimum="100" Maximum="100000"
                                        SmallChange="100" LargeChange="1000"
                                        Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="播放记录最大数量" />
-                        </controls:SettingsCard>
+            </controls:SettingsCard>
 
-                        <TextBlock Text="记录管理" Style="{StaticResource SectionTitleStyle}" />
-                        <controls:SettingsCard x:Name="ClearHistoryCard"
+            <TextBlock Text="记录管理" Style="{StaticResource SectionTitleStyle}" />
+            <controls:SettingsCard x:Name="ClearHistoryCard"
                                                Header="清空播放记录"
                                                Description="普通模式与隐私模式的记录分别存放在两个文件里。这里只清记录，不动设置与播放列表。">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button x:Name="ClearCurrentModeButton" Content="清空当前模式的记录…"
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="ClearCurrentModeButton" Content="清空当前模式的记录…"
                                         Click="ClearCurrentModeHistoryButton_Click"
                                         AutomationProperties.Name="清空当前模式的播放记录" />
-                                <Button x:Name="ClearBothModesButton" Content="清空两种模式的记录…"
+                <Button x:Name="ClearBothModesButton" Content="清空两种模式的记录…"
                                         Click="ClearBothModesHistoryButton_Click"
                                         AutomationProperties.Name="清空两种模式的播放记录" />
-                            </StackPanel>
-                        </controls:SettingsCard>
-                        <TextBlock x:Name="ClearHistoryStatusText" Margin="8,0,8,4" FontSize="12"
+              </StackPanel>
+            </controls:SettingsCard>
+            <TextBlock x:Name="ClearHistoryStatusText" Margin="8,0,8,4" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" />
-                    </StackPanel>
-                </ScrollViewer>
+          </StackPanel>
+        </ScrollViewer>
 
-                <Grid x:Name="DiagnosticsSection" Visibility="Collapsed" RowSpacing="12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="诊断" FontSize="24" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="1"
+        <Grid x:Name="DiagnosticsSection" Visibility="Collapsed" RowSpacing="12">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <TextBlock Text="诊断" FontSize="24" FontWeight="SemiBold" />
+          <TextBlock Grid.Row="1"
                                Text="查看显示器 HDR 状态、播放输出路径、视频轨道与杜比视界标记；也可查看最近 1,000 条运行日志（最新记录位于顶部）。"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                TextWrapping="Wrap" />
-                    <Grid Grid.Row="2" ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button Content="HDR / 杜比诊断" Click="RunHdrDiagnosticsButton_Click"
-                                AutomationProperties.Name="运行 HDR 杜比诊断"
-                                ToolTipService.ToolTip="读取当前媒体与显示设备信息，写入日志并显示在此" />
-                        <TextBox x:Name="HdrDiagnosticsTextBox" Grid.Column="1"
-                                 IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                                 MinHeight="72" FontFamily="Consolas" FontSize="12"
-                                 AutomationProperties.Name="HDR 杜比诊断结果" />
-                    </Grid>
-                    <TextBox x:Name="LogTextBox" Grid.Row="3"
+          <Grid Grid.Row="2" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="1">
+              <Button  Content="HDR / 杜比诊断" Click="RunHdrDiagnosticsButton_Click"
+                       AutomationProperties.Name="运行 HDR 杜比诊断"
+                       HorizontalAlignment="Right" Margin="0 0 0 10"
+                       ToolTipService.ToolTip="读取当前媒体与显示设备信息，写入日志并显示在此" />
+              <TextBox x:Name="HdrDiagnosticsTextBox" 
+                       IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                       MinHeight="72" FontFamily="Consolas" FontSize="12"
+                       AutomationProperties.Name="HDR 杜比诊断结果" />
+            </StackPanel>
+          </Grid>
+          <TextBox x:Name="LogTextBox" Grid.Row="3"
                              IsReadOnly="True" AcceptsReturn="True"
                              TextWrapping="NoWrap"
                              FontFamily="Consolas"
@@ -418,47 +421,47 @@
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                              AutomationProperties.Name="运行日志内容" />
-                    <Grid Grid.Row="4" ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button Content="刷新" Click="RefreshLogButton_Click"
+          <Grid Grid.Row="4" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Content="刷新" Click="RefreshLogButton_Click"
                                 ToolTipService.ToolTip="重新读取日志文件" />
-                        <Button Grid.Column="1" Content="复制" Click="CopyLogButton_Click"
+            <Button Grid.Column="1" Content="复制" Click="CopyLogButton_Click"
                                 ToolTipService.ToolTip="复制当前显示的日志" />
-                        <Button Grid.Column="2" Content="打开日志目录" Click="OpenLogFolderButton_Click"
+            <Button Grid.Column="2" Content="打开日志目录" Click="OpenLogFolderButton_Click"
                                 ToolTipService.ToolTip="在文件资源管理器中打开日志目录" />
-                        <TextBlock x:Name="LogStatusText" Grid.Column="3"
+            <TextBlock x:Name="LogStatusText" Grid.Column="3"
                                    HorizontalAlignment="Right" VerticalAlignment="Center"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </Grid>
-                </Grid>
-            </Grid>
-        </NavigationView>
+          </Grid>
+        </Grid>
+      </Grid>
+    </NavigationView>
 
-        <Border Grid.Row="2" Padding="16,10"
+    <Border Grid.Row="2" Padding="16,10"
                 BorderThickness="0,1,0,0"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource LayerFillColorDefaultBrush}">
-            <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="ModeIndicatorText" VerticalAlignment="Center"
+      <Grid ColumnSpacing="12">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="ModeIndicatorText" VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap" />
-                <Button Grid.Column="1" Content="取消" MinWidth="96"
+        <Button Grid.Column="1" Content="取消" MinWidth="96"
                         Click="CancelButton_Click"
                         AutomationProperties.Name="取消并关闭" />
-                <Button Grid.Column="2" Content="保存更改" MinWidth="112" FontWeight="SemiBold"
+        <Button Grid.Column="2" Content="保存更改" MinWidth="112" FontWeight="SemiBold"
                         Click="SaveButton_Click"
                         AutomationProperties.Name="保存设置" />
-            </Grid>
-        </Border>
-    </Grid>
+      </Grid>
+    </Border>
+  </Grid>
 </Window>
