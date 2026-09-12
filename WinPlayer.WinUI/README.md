@@ -515,7 +515,7 @@ mpv 自身的 `sub-auto` 自动发现。
 
 ### HDR / 杜比诊断
 
-位置：**选项 → 诊断日志 → HDR / 杜比诊断**。按钮结果直接显示在按钮右侧，并写入诊断日志。
+位置：**选项 → 诊断日志 → HDR / 杜比诊断**。结果直接显示在该按钮**下方**的结果框里，并写入诊断日志。
 
 输出的内容：当前是自绘还是直通呈现、系统给出的输出降级原因、显示器的高级颜色种类与峰值亮度、
 视频轨道的编码信息，以及文件中的杜比视界标记与推测 Profile。对应日志记录为 `HdrDiagnostics`
@@ -598,7 +598,7 @@ hwdec=auto-safe    sub-auto=fuzzy    secondary-sid=no    secondary-sub-visibilit
 
 排查方式：
 
-1. 打开“选项 → 诊断”，点击“HDR / 杜比诊断”按钮：结果会直接显示在按钮右侧，
+1. 打开“选项 → 诊断日志”，点击“HDR / 杜比诊断”按钮：结果会直接显示在该按钮下方的结果框里，
    同时写入诊断日志（`%LOCALAPPDATA%\WinPlayer.WinUI\Logs\winplayer.log`）中的
    `HdrDiagnostics` 与 `DolbyVisionProbe` 记录。诊断会给出：当前是自绘还是直通呈现、系统给出的输出降级原因、
    显示器的高级颜色种类与峰值亮度、视频轨道编码信息，以及文件中的杜比视界标记与推测 Profile。
