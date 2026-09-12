@@ -1,0 +1,46 @@
+# ============================================================================
+# WinPlayer.WinUI — Git 属性
+#
+# 文本文件统一以 LF 规范化存储（仓库现有 blob 均已是 LF），检出时的换行
+# 由各平台的 git 配置决定。二进制资源必须显式声明为 binary，避免 Git 做
+# 行尾转换或尝试对它们进行文本合并。
+# ============================================================================
+
+* text=auto
+
+# ---- 源码与工程文件（文本，参与 diff / 合并） ----
+*.cs             text
+*.xaml           text
+*.csproj         text
+*.wapproj        text
+*.props          text
+*.targets        text
+*.sln            text
+*.resx           text
+*.manifest       text
+*.appxmanifest   text
+*.pubxml         text
+*.config         text
+*.ps1            text
+*.json           text
+*.md             text
+*.yml            text
+*.yaml           text
+
+# ---- 二进制资源（不转换、不合并） ----
+*.ico             binary
+*.png             binary
+*.jpg             binary
+*.jpeg            binary
+*.gif             binary
+*.cur             binary
+*.ttf             binary
+*.xbf             binary
+*.pri             binary
+*.dll             binary
+*.exe             binary
+*.pdb             binary
+*.pfx             binary
+*.p12             binary
+*.snk             binary
+*.assets.cache    binary

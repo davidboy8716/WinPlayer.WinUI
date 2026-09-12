@@ -40,7 +40,7 @@ namespace WinPlayer.WinUI;
 public sealed partial class MainWindow : Window
 {
     private static readonly PropertyInfo? ProtectedCursorProperty = typeof(UIElement).GetProperty(
-        "ProtectedCursor", BindingFlags.Instance | BindingFlags.NonPublic);
+        "ProtectedCursor", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
     private static readonly InputCursor HorizontalResizeCursor =
         InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
     [StructLayout(LayoutKind.Sequential)]
@@ -50,6 +50,19 @@ public sealed partial class MainWindow : Window
     private static extern bool GetCursorPos(out NativePoint point);
 
     private bool isFullScreen;
+    // 全屏鼠标自动隐藏状态：窗口激活期间鼠标停止操作超过延时后隐藏光标，
+    // 一旦移动/点击/滚动立即恢复显示并重新计时。
+    private bool windowActive = true;
+    private bool fullScreenCursorHidden;
+    // 是否处于“正在播放”状态：只有在全屏且正在播放时才自动隐藏指针，
+    // 全屏暂停/停止时指针保持可见。
+    private bool isPlaybackActive;
+    // “窗口总在最前”开关状态（全屏期间暂存，退出全屏后生效）。
+    private bool keepOnTopRequested;
+    private DateTime cursorHideDeadline = DateTime.MaxValue;
+    private NativePoint cursorActivityAnchor;
+    private bool cursorActivityAnchorSet;
+    private readonly CursorManager cursorManager;
     private bool isDraggingPosition;
     private bool isDraggingWindow;
     private bool windowDragMoved;
@@ -62,20 +75,31 @@ public sealed partial class MainWindow : Window
     private Windows.Graphics.PointInt32 windowDragStartPosition;
     private FrameworkElement? draggedSkipMarker;
     private CanvasRenderTarget? videoFrame;
+    private CanvasBitmap? mpvFrameBitmap;
+    private byte[] mpvFrameBuffer = Array.Empty<byte>();
     private CanvasBitmap? pgsSubtitleBitmap;
     private PgsSubtitleImage? pgsSubtitleImage;
     private int folderTreeGeneration;
     // 将 MediaPlayer 帧服务器输出复制到此画布，使毛玻璃画刷能够采样视频内容。
     private readonly CanvasControl videoCanvas = new() { ClearColor = Colors.Black };
+    // 直通呈现模式下视频由系统合成器绘制，这里只叠加自绘的 SUP/PGS 图片字幕。
+    private readonly CanvasControl subtitleCanvas = new() { ClearColor = Colors.Transparent };
+    private MediaPlayerElement? mediaPresenter;
     private readonly Dictionary<FrameworkElement, DispatcherTimer> sidebarTimers = new();
     // 面板可见性属于实时界面状态，与持久化保存的面板尺寸相互独立。
     private readonly Dictionary<FrameworkElement, DateTime> panelHideDeadlines = new();
     private readonly HashSet<FrameworkElement> visiblePanels = new();
+    // 指针当前停留在哪些面板内。悬停期间不启动隐藏计时，只有指针移出后才开始计时；
+    // 该状态由面板的进入/离开事件与几何判定共同维护，不依赖指针是否在移动。
+    private readonly HashSet<FrameworkElement> hoveredPanels = new();
     private readonly DispatcherTimer panelAutoHideTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private readonly DispatcherTimer playbackClickTimer = new() { Interval = TimeSpan.FromMilliseconds(260) };
     private readonly DispatcherTimer notificationTimer = new() { Interval = TimeSpan.FromMilliseconds(2500) };
     private readonly SettingsService settingsService = new();
     private readonly PlayerSettings settings;
+    // 独立设置窗口（同一时刻只允许一个）；主窗口关闭时要一并关闭，否则进程不会退出。
+    private SettingsWindow? settingsWindow;
+    private bool settingsWindowDirectPresentBaseline;
     private readonly IReadOnlyList<string> startupArguments;
     private bool startupPlaybackRestored;
     private Windows.Graphics.PointInt32 normalWindowPosition;
@@ -90,13 +114,17 @@ public sealed partial class MainWindow : Window
             ToggleFoldersPanel, TogglePlaylistPanel, DispatcherQueue,
             settings, ShowSettingsAsync, () => settingsService.Save(settings));
         InitializeComponent();
+        // 应用界面主题（浅色/深色/跟随系统），须在界面构建后、首次布局前设置。
+        ApplyThemeMode();
+        // 指针显示/隐藏统一由 CursorManager 管理（透明光标 + Win32 兜底）。
+        cursorManager = new CursorManager(() => WinRT.Interop.WindowNative.GetWindowHandle(this));
         ViewModel.Folders.CollectionChanged += Folders_CollectionChanged;
         _ = RebuildFolderTreeAsync();
-        //设置图标
+        // 图标按模式区分：隐私模式使用 player.b.ico，任务栏可据此辨别当前窗口属于哪种模式。
         string iconPath = System.IO.Path.Combine(
         AppContext.BaseDirectory,
         "Images",
-        "player.ico");
+        AppMode.IconFileName);
 
         if (System.IO.File.Exists(iconPath))
             AppWindow.SetIcon(iconPath);
@@ -106,6 +134,7 @@ public sealed partial class MainWindow : Window
         if (FindKeepControlBarToggle() is ToggleButton controlBarToggle)
             controlBarToggle.IsChecked = settings.KeepControlBarVisible;
         InitializeSidebarAnimations();
+        AttachPanelHoverTracking();
         PositionSlider.Loaded += PositionSlider_Loaded;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         ViewModel.NotificationRequested += ViewModel_NotificationRequested;
@@ -120,54 +149,157 @@ public sealed partial class MainWindow : Window
         panelAutoHideTimer.Tick += PanelAutoHideTimer_Tick;
         panelAutoHideTimer.Start();
         playbackClickTimer.Tick += PlaybackClickTimer_Tick;
-        PositionSlider.AddHandler(UIElement.PointerPressedEvent,
-            new PointerEventHandler(PositionSlider_PointerPressed), true);
-        PositionSlider.AddHandler(UIElement.PointerReleasedEvent,
-            new PointerEventHandler(PositionSlider_PointerReleased), true);
+        PositionSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(PositionSlider_PointerPressed), true);
+        PositionSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(PositionSlider_PointerReleased), true);
         PositionSlider.ValueChanged += PositionSlider_ValueChanged;
         PositionSlider.SizeChanged += (_, _) => UpdateSkipMarkers();
         Root.SizeChanged += Root_SizeChanged;
         videoCanvas.Draw += VideoCanvas_Draw;
-        if (Root.FindName("PlayerElement") is FrameworkElement oldPlayer)
-            oldPlayer.Visibility = Visibility.Collapsed;
+        subtitleCanvas.Draw += SubtitleCanvas_Draw;
+        mediaPresenter = Root.FindName("PlayerElement") as MediaPlayerElement;
+        // 视频画布放在最底部，字幕叠加画布紧随其后，其余 XAML 面板自然位于两者上方。
         Root.Children.Insert(0, videoCanvas);
+        Root.Children.Insert(Math.Min(2, Root.Children.Count), subtitleCanvas);
+        ApplyVideoRenderMode();
         ViewModel.MediaPlayer.VideoFrameAvailable += MediaPlayer_VideoFrameAvailable;
         ViewModel.MediaPlayer.SubtitleFrameChanged += MediaPlayer_SubtitleFrameChanged;
+        ViewModel.MediaPlayer.MediaOpened += MediaPlayer_MediaOpenedDiagnostics;
         ViewModel.PgsSubtitleFrameChanged += ViewModel_PgsSubtitleFrameChanged;
+        ViewModel.MpvFrameAvailable += ViewModel_MpvFrameAvailable;
         RestoreWindowPlacement();
+        // 恢复“窗口总在最前”选项并同步开关状态。
+        keepOnTopRequested = settings.AlwaysOnTop;
+        if (Root.FindName("AlwaysOnTopToggle") is ToggleButton alwaysOnTopToggle)
+            alwaysOnTopToggle.IsChecked = keepOnTopRequested;
+        ApplyAlwaysOnTopState();
         AppWindow.Changed += AppWindow_Changed;
         ExtendsContentIntoTitleBar = true;
         AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
         AppWindow.TitleBar.ButtonBackgroundColor = Colors.Transparent;
         AppWindow.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        // 未调用 SetTitleBar 时，顶部系统标题栏条带默认是窗口拖动区（非客户区输入），
+        // TopBar 位于该条带内的按钮上半部分会被拖动输入吞掉，导致"有的点击没效果"。
+        // 注册 TopBar 为标题栏后，WinUI 会把其中的按钮标记为可交互区域。
+        SetTitleBar(TopBar);
         Activated += MainWindow_Activated;
         Closed += (_, _) =>
         {
-            SaveWindowPlacement();
-            AppWindow.Changed -= AppWindow_Changed;
-            Activated -= MainWindow_Activated;
-            ViewModel.MediaPlayer.VideoFrameAvailable -= MediaPlayer_VideoFrameAvailable;
-            ViewModel.MediaPlayer.SubtitleFrameChanged -= MediaPlayer_SubtitleFrameChanged;
-            ViewModel.PgsSubtitleFrameChanged -= ViewModel_PgsSubtitleFrameChanged;
-            ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
-            ViewModel.NotificationRequested -= ViewModel_NotificationRequested;
-            notificationTimer.Stop();
-            notificationTimer.Tick -= NotificationTimer_Tick;
-            ViewModel.Folders.CollectionChanged -= Folders_CollectionChanged;
-            panelAutoHideTimer.Stop();
-            playbackClickTimer.Stop();
-            playbackClickTimer.Tick -= PlaybackClickTimer_Tick;
-            Root.PointerExited -= Root_PointerExited;
-            Root.PointerCaptureLost -= Root_PointerCaptureLost;
-            Root.RemoveHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(Root_PointerWheelChanged));
-            videoFrame?.Dispose();
-            pgsSubtitleBitmap?.Dispose();
-            videoCanvas.Draw -= VideoCanvas_Draw;
-            PositionSlider.ValueChanged -= PositionSlider_ValueChanged;
-            videoCanvas.RemoveFromVisualTree();
-            ViewModel.Dispose();
+            // 关闭过程中抛出的异常会逃逸到 XAML 关闭路径，变成 STOWED_EXCEPTION
+            // （0xc000027b）直接崩掉进程，因此这里整体兜底并记录，保证任何一步失败都能正常退出。
+            StartExitWatchdog();
+            try
+            {
+                // 设置窗口是独立窗口：必须先关掉它，否则主窗口关闭后进程仍在运行。
+                settingsWindow?.Close();
+                settingsWindow = null;
+                // 若关闭时全屏光标仍处于隐藏状态，先补偿计数并恢复，避免残留隐形光标。
+                MakeCursorVisible();
+                // 直通模式下 MediaPlayer 仍被 MediaPlayerElement 引用，必须在释放 MediaPlayer 前解绑。
+                try
+                {
+                    mediaPresenter?.SetMediaPlayer(null);
+                }
+                catch (Exception ex)
+                {
+                    AppLogService.Warning("ClosedDetachPresenterFailed",
+                        "关闭时解绑 MediaPlayerElement 失败", null, ex);
+                }
+                SaveWindowPlacement(); AppWindow.Changed -= AppWindow_Changed;
+                Activated -= MainWindow_Activated;
+                ViewModel.MediaPlayer.VideoFrameAvailable -= MediaPlayer_VideoFrameAvailable;
+                ViewModel.MediaPlayer.SubtitleFrameChanged -= MediaPlayer_SubtitleFrameChanged;
+                ViewModel.MediaPlayer.MediaOpened -= MediaPlayer_MediaOpenedDiagnostics;
+                ViewModel.PgsSubtitleFrameChanged -= ViewModel_PgsSubtitleFrameChanged;
+                ViewModel.MpvFrameAvailable -= ViewModel_MpvFrameAvailable;
+                ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+                ViewModel.NotificationRequested -= ViewModel_NotificationRequested;
+                notificationTimer.Stop();
+                notificationTimer.Tick -= NotificationTimer_Tick;
+                ViewModel.Folders.CollectionChanged -= Folders_CollectionChanged;
+                panelAutoHideTimer.Stop();
+                playbackClickTimer.Stop();
+                playbackClickTimer.Tick -= PlaybackClickTimer_Tick;
+                Root.PointerExited -= Root_PointerExited;
+                Root.PointerCaptureLost -= Root_PointerCaptureLost;
+                Root.RemoveHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(Root_PointerWheelChanged));
+                videoFrame?.Dispose();
+                pgsSubtitleBitmap?.Dispose();
+                mpvFrameBitmap?.Dispose();
+                videoCanvas.Draw -= VideoCanvas_Draw;
+                subtitleCanvas.Draw -= SubtitleCanvas_Draw;
+                PositionSlider.ValueChanged -= PositionSlider_ValueChanged;
+                videoCanvas.RemoveFromVisualTree();
+                subtitleCanvas.RemoveFromVisualTree();
+                ViewModel.Dispose();
+            }
+            catch (Exception ex)
+            {
+                AppLogService.Error("WindowClosedCleanupFailed", "窗口关闭清理失败", null, ex);
+            }
         };
     }
+
+    /// <summary>
+    /// 退出程序。先解绑直通模式下的 MediaPlayerElement 并停止 libmpv 引擎，
+    /// 再关闭窗口；任何一步失败都回退到直接结束消息循环，并由看门狗保证进程一定退出。
+    /// </summary>
+    private void ExitApplication()
+    {
+        StartExitWatchdog();
+
+        try
+        {
+            mediaPresenter?.SetMediaPlayer(null);
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Warning("ExitDetachPresenterFailed", "退出前解绑 MediaPlayerElement 失败", null, ex);
+        }
+
+        try
+        {
+            ViewModel.StopMpvPlayback();
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Warning("ExitStopMpvEngineFailed", "退出前停止 libmpv 引擎失败", null, ex);
+        }
+
+        try
+        {
+            Close();
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Error("ExitCloseFailed", "关闭窗口失败，改为直接结束消息循环", null, ex);
+        }
+
+        try
+        {
+            Application.Current.Exit();
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Error("ExitApplicationFailed", "结束应用失败", null, ex);
+        }
+    }
+
+    /// <summary>
+    /// 退出看门狗：若正常关闭在 3 秒内没有结束进程（例如解码器/渲染线程卡住），直接结束进程，
+    /// 避免出现“关不掉程序”的情况。
+    /// </summary>
+    private static void StartExitWatchdog()
+    {
+        if (Interlocked.Exchange(ref exitWatchdogStarted, 1) == 1) return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(5000).ConfigureAwait(false);
+            AppLogService.Warning("ExitWatchdog", "正常关闭未在 5 秒内完成，强制结束进程");
+            Environment.Exit(0);
+        });
+    }
+
+    private static int exitWatchdogStarted;
 
     private void PositionSlider_Loaded(object sender, RoutedEventArgs e)
     {
@@ -250,6 +382,9 @@ public sealed partial class MainWindow : Window
 
     private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
     {
+        // 注意：Windows App SDK 2.x 中即使处于全屏，AppWindow.Presenter 类型仍可能是
+        // OverlappedPresenter，因此不能据此判断是否退出全屏——全屏状态只由
+        // ToggleFullScreen / EnterFullScreen 维护，与原始实现保持一致。
         if (isFullScreen) return;
         if (sender.Presenter is OverlappedPresenter presenter &&
             presenter.State != OverlappedPresenterState.Restored) return;
@@ -308,6 +443,18 @@ public sealed partial class MainWindow : Window
             ViewModel.PreviousCommand.Execute(null);
             e.Handled = true;
         }
+        else if ((InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down)
+        {
+            if (e.Key >= VirtualKey.NumberPad0 && e.Key <= VirtualKey.NumberPad4)
+            {
+                int number = (int)e.Key - (int)VirtualKey.NumberPad0;
+                // 全屏状态下直接改动窗口几何，会让 isFullScreen 与实际呈现状态不一致：
+                // 之后按 Enter 走的是"退出全屏"分支，看起来就像 Enter 失效了。先退回窗口化。
+                if (isFullScreen) ToggleFullScreen();
+                ViewModel.ChangefromSiseze(this, (WindowPosition)number);
+                e.Handled = true;
+            }
+        }
     }
 
     private static bool IsTextInputFocused()
@@ -318,6 +465,7 @@ public sealed partial class MainWindow : Window
 
     private void Root_WindowDragPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        NotifyCursorActivity();
         if (IsSidebarHandleSource(e.OriginalSource as DependencyObject)) return;
         if (!e.GetCurrentPoint(Root).Properties.IsLeftButtonPressed) return;
         Windows.Foundation.Point point = e.GetCurrentPoint(Root).Position;
@@ -336,6 +484,7 @@ public sealed partial class MainWindow : Window
 
     private void Root_WindowDragPointerReleased(object sender, PointerRoutedEventArgs e)
     {
+        NotifyCursorActivity();
         if (!isDraggingWindow) return;
         isDraggingWindow = false;
         Root.ReleasePointerCapture(e.Pointer);
@@ -348,6 +497,7 @@ public sealed partial class MainWindow : Window
 
     private void Root_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
+        NotifyCursorActivity();
         Windows.Foundation.Point point = e.GetCurrentPoint(Root).Position;
         if (point.Y < 52 || point.Y >= Root.ActualHeight - 112) return;
         if (LeftSidebar.IsHitTestVisible && point.X <= LeftSidebar.Width) return;
@@ -375,7 +525,9 @@ public sealed partial class MainWindow : Window
     private void PlaybackClickTimer_Tick(object? sender, object e)
     {
         playbackClickTimer.Stop();
-        ViewModel.PlayPauseCommand.Execute(null);
+        // 计时器还承担双击检测：即使关闭了单击播放/暂停，也要等它超时以排除双击。
+        if (settings.ClickToPlayPause)
+            ViewModel.PlayPauseCommand.Execute(null);
     }
 
     private static bool IsInteractiveElement(DependencyObject? element)
@@ -402,6 +554,13 @@ public sealed partial class MainWindow : Window
 
     private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
     {
+        // 全屏自动隐藏光标只在窗口处于激活状态时进行（见 EnforceCursorAutoHide）。
+        windowActive = args.WindowActivationState != WindowActivationState.Deactivated;
+        // 失去激活时指针的进入/离开事件可能收不到，清空悬停状态避免面板被永久“锁”在悬停里。
+        if (!windowActive) hoveredPanels.Clear();
+        // 窗口失焦（Alt+Tab 等）时立即恢复指针，避免把系统箭头“留空”给其他程序。
+        if (!windowActive && fullScreenCursorHidden)
+            RestoreCursorAfterFullScreen();
         if (startupPlaybackRestored) return;
         startupPlaybackRestored = true;
         if (startupArguments.Count > 0)
@@ -424,11 +583,29 @@ public sealed partial class MainWindow : Window
         if (sender is not MenuFlyout menu) return;
         menu.Items.Clear();
 
+        // 本项目字幕总开关：关闭后应用不再绘制自己的字幕层，
+        // 适合杜比视界引擎模式（字幕由 libmpv 渲染）下避免两行字幕重合。
+        var ownSubtitles = new ToggleMenuFlyoutItem
+        {
+            Text = "本项目字幕",
+            IsChecked = !settings.HideOwnSubtitles
+        };
+        ownSubtitles.Click += (_, _) =>
+        {
+            settings.HideOwnSubtitles = !ownSubtitles.IsChecked;
+            settingsService.Save(settings);
+            ViewModel.ApplyOwnSubtitleSetting();
+            ViewModel.ShowNotification(settings.HideOwnSubtitles
+                ? "已关闭本项目字幕（字幕由播放引擎负责）"
+                : "已开启本项目字幕");
+        };
+        menu.Items.Add(ownSubtitles);
+        menu.Items.Add(new MenuFlyoutSeparator());
+
         var disabled = new ToggleMenuFlyoutItem
         {
             Text = "关闭字幕",
-            IsChecked =
-            ViewModel.GetSubtitleTrackOptions().All(track => !track.IsSelected)
+            IsChecked = ViewModel.AreSubtitlesOff()
         };
         disabled.Click += (_, _) => ViewModel.SelectSubtitleTrack(-1);
         menu.Items.Add(disabled);
@@ -463,10 +640,9 @@ public sealed partial class MainWindow : Window
         };
         WinRT.Interop.InitializeWithWindow.Initialize(picker,
             WinRT.Interop.WindowNative.GetWindowHandle(this));
-        foreach (string extension in new[]
-        {
-            ".srt", ".ass", ".ssa", ".vtt", ".ttml", ".sup", ".sub"
-        }) picker.FileTypeFilter.Add(extension);
+        // 与字幕加载时的扩展名校验共用同一份列表（Models\SupportedMedia.cs）。
+        foreach (string extension in SupportedMedia.SubtitleExtensions)
+            picker.FileTypeFilter.Add(extension);
 
         StorageFile? file = await picker.PickSingleFileAsync();
         if (file is not null) await ViewModel.LoadExternalSubtitleAsync(file);
@@ -641,6 +817,8 @@ public sealed partial class MainWindow : Window
                  e.PropertyName == nameof(MainViewModel.IntroMarkerText) ||
                  e.PropertyName == nameof(MainViewModel.OutroMarkerText))
             UpdateSkipMarkers();
+        else if (e.PropertyName == nameof(MainViewModel.IsPlaying))
+            ApplyPlaybackActivity(ViewModel.IsPlaying);
         else if (e.PropertyName == nameof(MainViewModel.IsMediaOpen) && !ViewModel.IsMediaOpen)
             videoCanvas.Invalidate();
     }
@@ -684,11 +862,11 @@ public sealed partial class MainWindow : Window
 
         double intro = settings.SkipIntroSeconds;
         IntroMarker.Visibility = Visibility.Visible;
-        IntroMarker.Margin = new Thickness(12 + Math.Clamp(intro / duration, 0, 1) * width - IntroMarker.Width / 2, 2, 0, 0);
+        IntroMarker.Margin = new Thickness(12 + Math.Clamp(intro / duration, 0, 1) * width - IntroMarker.Width / 2, -25, 0, 0);
 
         double outroStart = duration - settings.SkipOutroSeconds;
         OutroMarker.Visibility = Visibility.Visible;
-        OutroMarker.Margin = new Thickness(12 + Math.Clamp(outroStart / duration, 0, 1) * width - OutroMarker.Width / 2, 2, 0, 0);
+        OutroMarker.Margin = new Thickness(12 + Math.Clamp(outroStart / duration, 0, 1) * width - OutroMarker.Width / 2, -25, 0, 0);
     }
 
     private void SetPanelVisible(FrameworkElement panel, bool show)
@@ -697,6 +875,8 @@ public sealed partial class MainWindow : Window
         if (panel == ControlBar && settings.KeepControlBarVisible && !show) return;
         if (show) visiblePanels.Add(panel); else visiblePanels.Remove(panel);
         if (show) panelHideDeadlines.Remove(panel);
+        // 隐藏后的面板不再算“悬停”，避免指针不再产生离开事件时留下过期的悬停状态。
+        if (!show) hoveredPanels.Remove(panel);
         FrameworkElement? handle = GetSidebarHandle(panel);
         if (handle is not null)
         {
@@ -705,6 +885,34 @@ public sealed partial class MainWindow : Window
             handle.IsHitTestVisible = show;
         }
         AnimatePanel(panel, show, GetHiddenTranslation(panel), handle);
+    }
+
+    /// <summary>
+    /// 让悬停状态由面板自身的进入/离开事件驱动：
+    /// 指针停在面板上（即使完全不动）就不会被隐藏计时命中，指针移开的那一刻才开始计时。
+    /// 侧栏调整块紧贴侧栏边缘，指针从侧栏移到调整块上不应被判定为“已离开”。
+    /// </summary>
+    private void AttachPanelHoverTracking()
+    {
+        foreach (FrameworkElement panel in
+                 new FrameworkElement[] { TopBar, ControlBar, LeftSidebar, RightSidebar })
+        {
+            FrameworkElement tracked = panel;
+            tracked.PointerEntered += (_, _) => UpdatePanelHover(tracked, true);
+            tracked.PointerExited += (_, _) => UpdatePanelHover(tracked, false);
+        }
+
+        foreach ((FrameworkElement handle, FrameworkElement panel) in
+                 new (FrameworkElement, FrameworkElement)[]
+                 {
+                     (LeftSidebarHandle, LeftSidebar),
+                     (RightSidebarHandle, RightSidebar)
+                 })
+        {
+            FrameworkElement owner = panel;
+            handle.PointerEntered += (_, _) => UpdatePanelHover(owner, true);
+            handle.PointerExited += (_, _) => UpdatePanelHover(owner, false);
+        }
     }
 
     private void ToggleFoldersPanel()
@@ -729,6 +937,10 @@ public sealed partial class MainWindow : Window
 
     private void UpdatePanelHover(FrameworkElement panel, bool pointerInside)
     {
+        // 记录悬停状态：悬停期间永远不累计时；由悬停变为非悬停的那一次才是“移出”。
+        bool wasHovered = hoveredPanels.Remove(panel);
+        if (pointerInside) hoveredPanels.Add(panel);
+
         if (panel == ControlBar && settings.KeepControlBarVisible)
         {
             panelHideDeadlines.Remove(panel);
@@ -740,8 +952,11 @@ public sealed partial class MainWindow : Window
             panelHideDeadlines.Remove(panel);
             if (!visiblePanels.Contains(panel)) SetPanelVisible(panel, true);
         }
-        else if (visiblePanels.Contains(panel) && !panelHideDeadlines.ContainsKey(panel))
+        else if (visiblePanels.Contains(panel) &&
+                 (wasHovered || !panelHideDeadlines.ContainsKey(panel)))
         {
+            // 指针移出面板时才开始隐藏计时（每次“移出”都从当前时刻重新计）；
+            // 指针在面板外持续移动不会延长计时，因此面板仍会按设定延迟隐藏。
             panelHideDeadlines[panel] = DateTime.UtcNow.AddSeconds(settings.AutoHideDelay);
         }
     }
@@ -790,6 +1005,9 @@ public sealed partial class MainWindow : Window
     private void PanelAutoHideTimer_Tick(object? sender, object e)
     {
         DateTime now = DateTime.UtcNow;
+        EnforceCursorAutoHide(now);
+        // 隐藏期间周期性压制，防止输入栈把指针弹回。
+        if (fullScreenCursorHidden) cursorManager.KeepHidden();
         foreach (FrameworkElement panel in panelHideDeadlines
                      .Where(item => item.Value <= now).Select(item => item.Key).ToArray())
         {
@@ -855,12 +1073,88 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => videoCanvas.Invalidate());
     }
 
+    /// <summary>
+    /// 播放状态变化：仅在"正在播放"时允许全屏自动隐藏指针；一旦暂停/停止立即恢复指针显示；
+    /// 恢复播放后重新开始空闲计时。状态源统一取 ViewModel.IsPlaying，这样系统媒体框架与
+    /// libmpv 杜比引擎两种播放路径都能正确驱动自动隐藏。
+    /// </summary>
+    private void ApplyPlaybackActivity(bool playing)
+    {
+        if (playing == isPlaybackActive) return;
+        isPlaybackActive = playing;
+        if (playing)
+        {
+            // 恢复播放：重新计时，指针静止超过延时后再次自动隐藏。
+            if (isFullScreen)
+                cursorHideDeadline = DateTime.UtcNow.AddSeconds(settings.AutoHideDelay);
+        }
+        else if (fullScreenCursorHidden)
+        {
+            // 暂停/停止：立即恢复指针显示并取消隐藏计划。
+            cursorHideDeadline = DateTime.MaxValue;
+            MakeCursorVisible();
+        }
+    }
+
     private void ViewModel_PgsSubtitleFrameChanged(PgsSubtitleImage? image)
     {
         pgsSubtitleImage = image;
         pgsSubtitleBitmap?.Dispose();
         pgsSubtitleBitmap = null;
+        // 自绘模式在同画布绘制字幕；直通模式由叠加画布绘制，两者都需要重绘。
         videoCanvas.Invalidate();
+        subtitleCanvas.Invalidate();
+    }
+
+    /// <summary>
+    /// libmpv 引擎渲染出新帧（渲染线程触发）：切回 UI 线程上传到 Win2D 位图并重绘画布。
+    /// </summary>
+    private void ViewModel_MpvFrameAvailable() => DispatcherQueue.TryEnqueue(() =>
+    {
+        try
+        {
+            UpdateMpvFrameBitmap();
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Warning("MpvFrameUploadFailed", "上传 libmpv 帧到画布失败", null, ex);
+        }
+        finally
+        {
+            ViewModel.MarkMpvFrameConsumed();
+        }
+        videoCanvas.Invalidate();
+    });
+
+    private bool mpvPresentFailedLogged;
+
+    private void UpdateMpvFrameBitmap()
+    {
+        MpvDvEngine? engine = ViewModel.MpvEngine;
+        if (engine is null) return;
+
+        int needed = engine.FrameWidth * engine.FrameHeight * 4;
+        if (needed <= 0) return;
+        if (mpvFrameBuffer.Length != needed) mpvFrameBuffer = new byte[needed];
+        if (!engine.CopyFrame(mpvFrameBuffer, out int width, out int height, out int stride)) return;
+        if (stride != width * 4) return;
+
+        if (mpvFrameBitmap is not null &&
+            (mpvFrameBitmap.SizeInPixels.Width != width || mpvFrameBitmap.SizeInPixels.Height != height))
+        {
+            mpvFrameBitmap.Dispose();
+            mpvFrameBitmap = null;
+        }
+
+        if (mpvFrameBitmap is null)
+        {
+            // 引擎输出 BGRA（自上而下），与 B8G8R8A8 位图逐字节一致，可直接创建。
+            mpvFrameBitmap = CanvasBitmap.CreateFromBytes(videoCanvas, mpvFrameBuffer, width, height,
+                DirectXPixelFormat.B8G8R8A8UIntNormalized, 96, CanvasAlphaMode.Ignore);
+            return;
+        }
+
+        mpvFrameBitmap.SetPixelBytes(mpvFrameBuffer);
     }
 
     private void VideoCanvas_Draw(CanvasControl sender, CanvasDrawEventArgs args)
@@ -873,6 +1167,28 @@ public sealed partial class MainWindow : Window
         // CanvasControl 会保留上一次绘制结果。媒体源被关闭后必须先清屏，
         // 否则空目录或停止播放时仍可能看到上一帧画面。
         args.DrawingSession.Clear(Colors.Black);
+
+        // libmpv 引擎（杜比视界内容）直接绘制引擎输出的位图。
+        if (ViewModel.IsMpvEngineActive && mpvFrameBitmap is not null)
+        {
+            Windows.Foundation.Size bitmapSize = mpvFrameBitmap.Size;
+            float fit = Math.Min(width / (float)bitmapSize.Width, height / (float)bitmapSize.Height);
+            float fitWidth = (float)bitmapSize.Width * fit;
+            float fitHeight = (float)bitmapSize.Height * fit;
+            try
+            {
+                args.DrawingSession.DrawImage(mpvFrameBitmap,
+                    new Windows.Foundation.Rect((width - fitWidth) / 2, (height - fitHeight) / 2, fitWidth, fitHeight),
+                    mpvFrameBitmap.Bounds);
+            }
+            catch (Exception ex) when (!mpvPresentFailedLogged)
+            {
+                // 只在首次失败时记录，避免每帧刷日志。
+                mpvPresentFailedLogged = true;
+                AppLogService.Error("MpvFramePresentFailed", "绘制 libmpv 帧失败", null, ex);
+            }
+            return;
+        }
 
         if (videoFrame is null ||
             Math.Abs(videoFrame.Size.Width - width) > 1 ||
@@ -914,33 +1230,139 @@ public sealed partial class MainWindow : Window
         args.DrawingSession.DrawImage(videoFrame,
             new Windows.Foundation.Rect(0, 0, width, height), videoFrame.Bounds);
 
-        if (pgsSubtitleImage is not null)
-        {
-            pgsSubtitleBitmap ??= CanvasBitmap.CreateFromBytes(sender,
-                pgsSubtitleImage.Pixels, pgsSubtitleImage.Width, pgsSubtitleImage.Height,
-                DirectXPixelFormat.B8G8R8A8UIntNormalized, 96,
-                CanvasAlphaMode.Premultiplied);
+        // 帧服务器模式不会自动呈现 SUP/PGS 等图片字幕，因此叠加在同一画布上绘制。
+        DrawPgsSubtitle(args.DrawingSession, width, height);
+    }
 
-            // videoFrame.SizeInPixels 使用物理像素，而 CanvasControl 的绘制坐标使用 DIP。
-            // 直接复用上面的 left/top/drawWidth/drawHeight 会在高 DPI 下把底部字幕画到画布外。
-            // 因此按最终显示画布重新计算等比缩放后的可见视频区域。
-            double displayScale = Math.Min(width / sourceWidth, height / sourceHeight);
-            double displayWidth = sourceWidth * displayScale;
-            double displayHeight = sourceHeight * displayScale;
-            double displayLeft = (width - displayWidth) / 2;
-            double displayTop = (height - displayHeight) / 2;
-            double subtitleLeft = displayLeft +
-                pgsSubtitleImage.X / (double)pgsSubtitleImage.CanvasWidth * displayWidth;
-            double subtitleTop = displayTop +
-                pgsSubtitleImage.Y / (double)pgsSubtitleImage.CanvasHeight * displayHeight;
-            double subtitleWidth =
-                pgsSubtitleImage.Width / (double)pgsSubtitleImage.CanvasWidth * displayWidth;
-            double subtitleHeight =
-                pgsSubtitleImage.Height / (double)pgsSubtitleImage.CanvasHeight * displayHeight;
-            args.DrawingSession.DrawImage(pgsSubtitleBitmap,
-                new Windows.Foundation.Rect(subtitleLeft, subtitleTop, subtitleWidth, subtitleHeight),
-                pgsSubtitleBitmap.Bounds);
+    private void SubtitleCanvas_Draw(CanvasControl sender, CanvasDrawEventArgs args)
+    {
+        // 直通模式下视频由系统呈现，叠加画布保持透明，只绘制自绘的图片字幕。
+        args.DrawingSession.Clear(Colors.Transparent);
+        DrawPgsSubtitle(args.DrawingSession, (float)sender.ActualWidth, (float)sender.ActualHeight);
+    }
+
+    /// <summary>
+    /// 绘制自绘的 SUP/PGS 图片字幕。帧服务器模式下与视频帧同画布绘制，
+    /// 直通模式下由独立叠加画布绘制，两处共用同一套缩放与定位计算。
+    /// </summary>
+    private void DrawPgsSubtitle(CanvasDrawingSession session, float canvasWidth, float canvasHeight)
+    {
+        // 关闭“本项目字幕”或由 libmpv 引擎渲染时，本程序不再自绘图片字幕。
+        if (pgsSubtitleImage is null || canvasWidth < 1 || canvasHeight < 1 ||
+            settings.HideOwnSubtitles || ViewModel.IsMpvEngineActive) return;
+
+        uint sourceWidth = ViewModel.MediaPlayer.PlaybackSession.NaturalVideoWidth;
+        uint sourceHeight = ViewModel.MediaPlayer.PlaybackSession.NaturalVideoHeight;
+        if (sourceWidth == 0 || sourceHeight == 0) return;
+
+        pgsSubtitleBitmap ??= CanvasBitmap.CreateFromBytes(session,
+            pgsSubtitleImage.Pixels, pgsSubtitleImage.Width, pgsSubtitleImage.Height,
+            DirectXPixelFormat.B8G8R8A8UIntNormalized, 96,
+            CanvasAlphaMode.Premultiplied);
+
+        // videoFrame.SizeInPixels 使用物理像素，而 CanvasControl 的绘制坐标使用 DIP。
+        // 直接复用视频的绘制矩形会在高 DPI 下把底部字幕画到画布外。
+        // 因此按最终显示画布重新计算等比缩放后的可见视频区域。
+        double displayScale = Math.Min(canvasWidth / sourceWidth, canvasHeight / sourceHeight);
+        double displayWidth = sourceWidth * displayScale;
+        double displayHeight = sourceHeight * displayScale;
+        double displayLeft = (canvasWidth - displayWidth) / 2;
+        double displayTop = (canvasHeight - displayHeight) / 2;
+        double subtitleLeft = displayLeft +
+            pgsSubtitleImage.X / (double)pgsSubtitleImage.CanvasWidth * displayWidth;
+        double subtitleTop = displayTop +
+            pgsSubtitleImage.Y / (double)pgsSubtitleImage.CanvasHeight * displayHeight;
+        double subtitleWidth =
+            pgsSubtitleImage.Width / (double)pgsSubtitleImage.CanvasWidth * displayWidth;
+        double subtitleHeight =
+            pgsSubtitleImage.Height / (double)pgsSubtitleImage.CanvasHeight * displayHeight;
+        session.DrawImage(pgsSubtitleBitmap,
+            new Windows.Foundation.Rect(subtitleLeft, subtitleTop, subtitleWidth, subtitleHeight),
+            pgsSubtitleBitmap.Bounds);
+    }
+
+    /// <summary>
+    /// 应用“自绘 / 直通”两种视频呈现模式：
+    /// 自绘模式由 Win2D 画布呈现帧服务器输出；直通模式把 MediaPlayer 交给
+    /// MediaPlayerElement，由系统合成器输出，HDR/杜比内容据此才有机会正确进 HDR。
+    /// </summary>
+    private void ApplyVideoRenderMode()
+    {
+        // libmpv 引擎的画面由本应用的 Win2D 画布呈现，因此该模式下画布必须可见，
+        // “直通呈现”只影响系统媒体框架的输出路径，不能把画布折叠掉。
+        bool mpvMode = settings.UseLibMpvEngine && ViewModel.IsMpvEngineAvailable;
+        bool direct = settings.HdrDirectPresent && !mpvMode;
+        if (mediaPresenter is not null)
+        {
+            try
+            {
+                mediaPresenter.SetMediaPlayer(direct ? ViewModel.MediaPlayer : null);
+            }
+            catch (Exception ex)
+            {
+                AppLogService.Warning("RenderModeAttachFailed",
+                    "绑定 MediaPlayerElement 失败", new { DirectPresent = direct }, ex);
+            }
+            mediaPresenter.Visibility = direct ? Visibility.Visible : Visibility.Collapsed;
         }
+        videoCanvas.Visibility = direct ? Visibility.Collapsed : Visibility.Visible;
+        subtitleCanvas.Visibility = direct ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void MediaPlayer_MediaOpenedDiagnostics(MediaPlayer sender, object args) =>
+        DispatcherQueue.TryEnqueue(ReportHdrDiagnostics);
+
+    /// <summary>
+    /// 汇总一次 HDR/杜比诊断：写入日志、返回可读文本。
+    /// 用来回答“画面异常是内容本身还是输出路径的问题”以及“到底有没有进 HDR”。
+    /// </summary>
+    private string BuildHdrDiagnosticsText()
+    {
+        string? path = ViewModel.CurrentMediaPath;
+        string display = HdrDiagnosticsService.DescribeDisplay(AppWindow.Id);
+        string sessionReport = HdrDiagnosticsService.DescribeSession(ViewModel.MediaPlayer);
+        string track = HdrDiagnosticsService.DescribeVideoTrack(ViewModel.PlaybackItem);
+        AppLogService.Information("HdrDiagnostics", "HDR/杜比视界诊断", new
+        {
+            MediaPath = AppMode.IsPrivacy ? null : path,
+            FileName = AppMode.IsPrivacy ? System.IO.Path.GetFileName(path) : null,
+            DirectPresent = settings.HdrDirectPresent,
+            LibMpvEngine = settings.UseLibMpvEngine,
+            Display = display,
+            Session = sessionReport,
+            VideoTrack = track
+        });
+        return string.Join(Environment.NewLine,
+            $"媒体：{path ?? "（当前没有打开的媒体）"}",
+            sessionReport,
+            display,
+            track,
+            $"日志文件：{AppLogService.LogPath}");
+    }
+
+    /// <summary>媒体打开时自动输出一次诊断，并给出简短提示。</summary>
+    private void ReportHdrDiagnostics()
+    {
+        string text = BuildHdrDiagnosticsText();
+        string summary = string.Join("；", text.Split(Environment.NewLine).Skip(1).Take(2));
+        ViewModel.ShowNotification(summary);
+        _ = ProbeDolbyVisionAsync(ViewModel.CurrentMediaPath);
+    }
+
+    private async Task ProbeDolbyVisionAsync(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        string? probe = await Task.Run(() => HdrDiagnosticsService.ProbeDolbyVision(path));
+        if (string.IsNullOrWhiteSpace(probe)) return;
+        AppLogService.Information("DolbyVisionProbe", probe, AppMode.IsPrivacy
+            ? new { FileName = System.IO.Path.GetFileName(path) }
+            : new { MediaPath = path });
+        // Profile 5 没有 HDR10 兼容基础层，系统媒体框架不会处理它的 IPT/RPU，画面必然发绿/发紫，
+        // 因此这里直接给出可行出路：交给使用 libplacebo/MPCV 管线的外部播放器。
+        string message = probe.Contains("Profile 5", StringComparison.Ordinal)
+            ? "检测到杜比视界 Profile 5：系统媒体框架必然发绿/发紫，请在播放区域右键菜单开启「打开杜比引擎」（需 libmpv-2.dll）"
+            : probe;
+        DispatcherQueue.TryEnqueue(() => ViewModel.ShowNotification(message));
     }
 
     private async Task<IReadOnlyList<StorageFile>> PickMediaFileAsync()
@@ -948,12 +1370,23 @@ public sealed partial class MainWindow : Window
         var picker = new FileOpenPicker();
         WinRT.Interop.InitializeWithWindow.Initialize(picker,
             WinRT.Interop.WindowNative.GetWindowHandle(this));
-        foreach (string extension in new[]
-        {
-            ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".m4v", ".mp3", ".flac", ".wav"
-        }) picker.FileTypeFilter.Add(extension);
+        // 与拖放扫描、文件关联共用同一份扩展名列表（Models\SupportedMedia.cs），
+        // 避免文件选择器只提供其中一部分、与 README 声明的支持范围不一致。
+        foreach (string extension in SupportedMedia.MediaExtensions)
+            picker.FileTypeFilter.Add(extension);
         var files = await picker.PickMultipleFilesAsync();
         return files.ToList();
+    }
+
+    /// <summary>把界面主题（浅色/深色/跟随系统）应用到窗口根元素。</summary>
+    private void ApplyThemeMode()
+    {
+        Root.RequestedTheme = settings.ThemeMode switch
+        {
+            1 => ElementTheme.Light,
+            2 => ElementTheme.Dark,
+            _ => ElementTheme.Default
+        };
     }
 
     private void ApplySettings()
@@ -1089,24 +1522,65 @@ public sealed partial class MainWindow : Window
             112);
     }
 
-    private async Task ShowSettingsAsync()
+    /// <summary>
+    /// 打开独立的设置窗口（不是浮在主窗口上的对话框：主窗口再小也不会挤掉设置项）。
+    /// 已打开时只激活，避免出现多个设置窗口。
+    /// </summary>
+    private Task ShowSettingsAsync()
     {
-        var dialog = new SettingsDialog(settings)
+        if (settingsWindow is not null)
         {
-            XamlRoot = Root.XamlRoot,
-            RequestedTheme = Root.ActualTheme
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            settingsWindow.Activate();
+            return Task.CompletedTask;
+        }
 
-        dialog.ApplyTo(settings);
-        settingsService.Save(settings);
+        var window = new SettingsWindow(
+            settings,
+            () => settingsService.Save(settings),
+            BuildHdrDiagnosticsText,
+            ViewModel.ClearAllPlaybackHistoryAsync,
+            ViewModel.ClearBothModesHistoryAsync);
+        // 打开设置窗口时记下呈现模式，保存后只在它真正变化时重载当前媒体。
+        settingsWindowDirectPresentBaseline = settings.HdrDirectPresent;
+        window.ClosedByUser += (_, _) => settingsWindow = null;
+        window.Saved += async (_, _) =>
+        {
+            try { await ApplySettingsFromWindowAsync(); }
+            catch (Exception ex)
+            {
+                AppLogService.Error("ApplySettingsAfterSaveFailed", "应用设置失败", null, ex);
+            }
+        };
+        settingsWindow = window;
+        window.Activate();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>设置窗口点“保存更改”后，把改动应用到主窗口与播放管线。</summary>
+    private async Task ApplySettingsFromWindowAsync()
+    {
         if (FindKeepControlBarToggle() is ToggleButton controlBarToggle)
             controlBarToggle.IsChecked = settings.KeepControlBarVisible;
+        ApplyThemeMode();
         ApplySettings();
         ApplyControlBarVisibilitySetting();
+        // 视频呈现模式（自绘 / 直通）随选项生效；该开关只在媒体管线重建后才真正改变输出路径，
+        // 因此切换后重新装载当前媒体。
+        ViewModel.ApplyRenderModeSetting();
+        ApplyVideoRenderMode();
+        ViewModel.ApplyOwnSubtitleSetting();
+        if (settingsWindowDirectPresentBaseline != settings.HdrDirectPresent)
+            ViewModel.ReloadCurrentMediaForRenderMode();
+        if (ViewModel.HasCurrentMedia) ReportHdrDiagnostics();
         ViewModel.RefreshSkipSettings();
         await ViewModel.ApplyPlaybackHistorySettingsAsync();
         UpdateSkipMarkers();
+        ViewModel.ShowNotification(settings.ThemeMode switch
+        {
+            1 => "已保存设置并切换为浅色主题",
+            2 => "已保存设置并切换为深色主题",
+            _ => "已保存设置，主题跟随系统"
+        });
     }
 
     private void Playlist_RightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -1169,35 +1643,52 @@ public sealed partial class MainWindow : Window
         flyout.Items.Add(clear);
         flyout.Items.Add(new MenuFlyoutSeparator());
 
-        var clearAll = new MenuFlyoutItem { Text = "清空全部播放记录…", Icon = Icon("\uE74D") };
-        clearAll.Click += async (_, _) => await ConfirmClearAllPlaybackHistoryAsync();
-        flyout.Items.Add(clearAll);
-
         flyout.ShowAt(container, e.GetPosition(container));
         e.Handled = true;
     }
 
-    private async Task ConfirmClearAllPlaybackHistoryAsync()
-    {
-        var dialog = new ContentDialog
-        {
-            XamlRoot = Root.XamlRoot,
-            Title = "清空全部播放记录？",
-            Content = "此操作会删除所有文件保存的续播位置，但不会清空播放列表。",
-            PrimaryButtonText = "全部清空",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Close
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            await ViewModel.ClearAllPlaybackHistoryAsync();
-    }
-
     private void ToggleFullScreen()
     {
-        isFullScreen = !isFullScreen;
-        AppWindow.SetPresenter(isFullScreen
-            ? AppWindowPresenterKind.FullScreen
-            : AppWindowPresenterKind.Default);
+        if (isFullScreen)
+        {
+            isFullScreen = false;
+            AppWindow.SetPresenter(AppWindowPresenterKind.Default);
+            RestoreCursorAfterFullScreen();
+            // 从全屏退回窗口化后，恢复“窗口总在最前”设置。
+            ApplyAlwaysOnTopState();
+        }
+        else
+        {
+            EnterFullScreen();
+        }
+    }
+
+    /// <summary>
+    /// “窗口总在最前”开关（TopBar 上全屏按钮右侧）。全屏期间仅记录意向，
+    /// 回到窗口化时由 <see cref="ApplyAlwaysOnTopState"/> 生效。
+    /// </summary>
+    private void AlwaysOnTopToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleButton toggleButton) return;
+        keepOnTopRequested = toggleButton.IsChecked == true;
+        settings.AlwaysOnTop = keepOnTopRequested;
+        settingsService.Save(settings);
+        ApplyAlwaysOnTopState();
+        ViewModel.ShowNotification(keepOnTopRequested ? "窗口已置顶显示" : "已关闭窗口置顶");
+    }
+
+    private void ApplyAlwaysOnTopState()
+    {
+        if (isFullScreen) return;
+        if (AppWindow.Presenter is not OverlappedPresenter presenter) return;
+        try
+        {
+            presenter.IsAlwaysOnTop = keepOnTopRequested;
+        }
+        catch
+        {
+            // 某些呈现器状态不允许设置置顶，忽略即可。
+        }
     }
 
     private void EnterFullScreen()
@@ -1205,6 +1696,81 @@ public sealed partial class MainWindow : Window
         if (isFullScreen) return;
         isFullScreen = true;
         AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+        // 进入全屏即重新计时并保持光标可见；之后无操作超时才自动隐藏。
+        cursorHideDeadline = DateTime.UtcNow.AddSeconds(settings.AutoHideDelay);
+        MakeCursorVisible();
+    }
+
+    /// <summary>通过 CursorManager 恢复鼠标指针显示。</summary>
+    private void MakeCursorVisible()
+    {
+        fullScreenCursorHidden = false;
+        cursorManager.Show();
+    }
+
+    /// <summary>退出全屏后强制恢复指针，避免用户看到“鼠标消失”的窗口化界面。</summary>
+    private void RestoreCursorAfterFullScreen()
+    {
+        cursorHideDeadline = DateTime.MaxValue;
+        MakeCursorVisible();
+    }
+
+    /// <summary>通过 CursorManager 隐藏鼠标指针（空闲超时后由 EnforceCursorAutoHide 调用）。</summary>
+    private void HideCursorForFullScreen()
+    {
+        if (fullScreenCursorHidden) return;
+        fullScreenCursorHidden = true;
+        cursorManager.Hide();
+    }
+
+    /// <summary>
+    /// 记录一次“有效”的鼠标操作：移动超过阈值、点击、滚动等。
+    /// 刷新自动隐藏倒计时，指针若处于隐藏状态则恢复显示。
+    /// </summary>
+    private void NotifyCursorActivity()
+    {
+        if (!isFullScreen) return;
+        cursorHideDeadline = DateTime.UtcNow.AddSeconds(settings.AutoHideDelay);
+        if (fullScreenCursorHidden) MakeCursorVisible();
+    }
+
+    /// <summary>
+    /// 判断本次指针移动是否“足够大”（超过 3 物理像素）。鼠标传感器在静止时也会产生
+    /// 1~2 像素的微抖动，若把这些都算作活动，自动隐藏将永远等不到空闲计时，指针也就
+    /// 始终不隐藏。
+    /// </summary>
+    private bool IsSignificantPointerMove()
+    {
+        if (!GetCursorPos(out NativePoint current)) return false;
+        if (!cursorActivityAnchorSet)
+        {
+            cursorActivityAnchor = current;
+            cursorActivityAnchorSet = true;
+            return true;
+        }
+        int dx = current.X - cursorActivityAnchor.X;
+        int dy = current.Y - cursorActivityAnchor.Y;
+        if (dx * dx + dy * dy < 9) return false;
+        cursorActivityAnchor = current;
+        return true;
+    }
+
+    /// <summary>由面板自动隐藏计时器周期调用：全屏播放空闲超时后隐藏指针（并连带隐藏悬浮栏）。</summary>
+    private void EnforceCursorAutoHide(DateTime now)
+    {
+        // 只有“全屏 + 窗口激活 + 正在播放 + 指针空闲超时”才自动隐藏；
+        // 窗口未激活（如 Alt+Tab）、指针已离开窗口、或暂停/停止时不隐藏，
+        // 否则会把光标从其他窗口上“藏掉”或让用户在暂停时找不到指针。
+        if (!isFullScreen || !windowActive || !isPlaybackActive || now < cursorHideDeadline) return;
+        if (fullScreenCursorHidden) return;
+        HideCursorForFullScreen();
+        // 与面板逻辑保持一致：鼠标长时间无操作时把已显示的悬浮栏一并隐藏。
+        // 但指针正停在某个面板上时不隐藏它——悬停必须优先于空闲隐藏。
+        DateTime deadline = now.AddSeconds(settings.AutoHideDelay);
+        foreach (FrameworkElement panel in visiblePanels)
+            if ((panel != ControlBar || !settings.KeepControlBarVisible) &&
+                !hoveredPanels.Contains(panel))
+                panelHideDeadlines[panel] = deadline;
     }
 
     private void PositionSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1269,6 +1835,8 @@ public sealed partial class MainWindow : Window
 
     private void Root_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        // 只在指针发生“明显移动”（>3px）时视为活动，过滤静止时传感器的微抖动。
+        if (IsSignificantPointerMove()) NotifyCursorActivity();
         if (isDraggingWindow && GetCursorPos(out NativePoint cursor))
         {
             int deltaX = cursor.X - windowDragStartCursor.X;
@@ -1290,14 +1858,20 @@ public sealed partial class MainWindow : Window
 
         UpdatePanelHover(TopBar, point.Y <= 52);
         UpdatePanelHover(ControlBar, point.Y >= height - 112);
-        UpdatePanelHover(LeftSidebar, middleY && point.X <=
-            (visiblePanels.Contains(LeftSidebar) ? LeftSidebar.Width : 36));
-        UpdatePanelHover(RightSidebar, middleY && point.X >= width -
-            (visiblePanels.Contains(RightSidebar) ? RightSidebar.Width : 36));
+        if (settings.AutoShowSidebar)
+        {
+            UpdatePanelHover(LeftSidebar, middleY && point.X <= (visiblePanels.Contains(LeftSidebar) ? LeftSidebar.Width : 36));
+            UpdatePanelHover(RightSidebar, middleY && point.X >= width - (visiblePanels.Contains(RightSidebar) ? RightSidebar.Width : 36));
+        }
     }
 
     private void Root_PointerExited(object sender, PointerRoutedEventArgs e)
     {
+        // 指针离开窗口后停止自动隐藏计时，防止把光标从其他应用窗口上隐藏；
+        // 移回窗口时 PointerMoved 会重新开始计时并恢复光标。
+        if (isFullScreen) cursorHideDeadline = DateTime.MaxValue;
+        // 指针已不在窗口内，任何面板都不再算悬停。
+        hoveredPanels.Clear();
         DateTime deadline = DateTime.UtcNow.AddSeconds(settings.AutoHideDelay);
         foreach (FrameworkElement panel in visiblePanels)
             if (panel != ControlBar || !settings.KeepControlBarVisible)
@@ -1306,6 +1880,7 @@ public sealed partial class MainWindow : Window
 
     private void Root_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
+        NotifyCursorActivity();
         if (e.Handled) return;
         // 每次打开时动态构建菜单，使图标和选中状态与当前播放状态一致。
         var flyout = new MenuFlyout();
@@ -1360,25 +1935,55 @@ public sealed partial class MainWindow : Window
         var loop = new ToggleMenuFlyoutItem
         {
             Text = "单曲循环",
-            IsChecked = ViewModel.MediaPlayer.IsLoopingEnabled,
+            IsChecked = ViewModel.IsLoopingEnabled,
             Icon = MenuIcon("\uE8EE")
         };
-        loop.Click += (_, _) => ViewModel.MediaPlayer.IsLoopingEnabled = loop.IsChecked;
+        loop.Click += (_, _) => ViewModel.IsLoopingEnabled = loop.IsChecked;
         flyout.Items.Add(loop);
         flyout.Items.Add(new MenuFlyoutSeparator());
         flyout.Items.Add(CommandItem("显示 / 隐藏媒体栏", ViewModel.ToggleFoldersCommand, "\uE8B7"));
         flyout.Items.Add(CommandItem("显示 / 隐藏播放列表", ViewModel.TogglePlaylistCommand, "\uE8FD"));
         flyout.Items.Add(CommandItem("全屏", ViewModel.FullScreenCommand, "\uE740"));
-        flyout.Items.Add(CommandItem("选项…", ViewModel.SettingsCommand, "\uE713"));
-        var clearHistory = new MenuFlyoutItem
+        // libmpv 引擎：系统媒体框架无法正确呈现杜比视界 Profile 5 时的替代播放引擎。
+        var mpvEngineItem = new ToggleMenuFlyoutItem
         {
-            Text = "清空全部播放记录…",
-            Icon = MenuIcon("\uE74D")
+            Text = "打开杜比引擎",
+            IsChecked = settings.UseLibMpvEngine,
+            IsEnabled = ViewModel.IsMpvEngineAvailable,
+            Icon = MenuIcon("\uE7F4")
         };
-        clearHistory.Click += async (_, _) => await ConfirmClearAllPlaybackHistoryAsync();
-        flyout.Items.Add(clearHistory);
+        mpvEngineItem.Click += (_, _) =>
+        {
+            settings.UseLibMpvEngine = mpvEngineItem.IsChecked;
+            settingsService.Save(settings);
+            if (mpvEngineItem.IsChecked)
+            {
+                // 立即把当前媒体切到 libmpv，便于直接对比画面。
+                ViewModel.SwitchCurrentMediaToMpvEngine();
+            }
+            else
+            {
+                ViewModel.StopMpvPlayback();
+                if (ViewModel.SelectedItem is { } item) ViewModel.PlayItem(item);
+            }
+        };
+        flyout.Items.Add(mpvEngineItem);
+        //flyout.Items.Add(ActionItem("用外部播放器打开", () => ViewModel.ShowNotification(
+        //    ExternalPlayerService.Open(ViewModel.CurrentMediaPath, settings.ExternalPlayerPath)), "\uE8E5"));
+        flyout.Items.Add(CommandItem("选项…", ViewModel.SettingsCommand, "\uE713"));
         flyout.Items.Add(new MenuFlyoutSeparator());
-        flyout.Items.Add(ActionItem("退出", Close, "\uE8BB"));
+        // 菜单项回调里同步调用 Window.Close() 会在弹出菜单轻触消失的过程中抛
+        // COMException 0x80004004；这里等菜单完全消失后再退出，并带强制结束进程的兜底。
+        flyout.Items.Add(ActionItem("退出", () =>
+        {
+            var exitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            exitTimer.Tick += (timer, _) =>
+            {
+                if (timer is DispatcherTimer dispatcherTimer) dispatcherTimer.Stop();
+                ExitApplication();
+            };
+            exitTimer.Start();
+        }, "\uE8BB"));
 
         flyout.ShowAt(Root, e.GetPosition(Root));
         e.Handled = true;

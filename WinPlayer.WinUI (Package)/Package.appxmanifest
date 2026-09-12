@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -10,14 +10,14 @@
 
   <Identity
     Name="45c8bda1-6183-427b-8dc5-07714f3d9513"
-    Publisher="CN=david"
+    Publisher="CN=WinPlayer.WinUI"
     Version="1.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="45c8bda1-6183-427b-8dc5-07714f3d9513" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>WinPlayer.WinUI (Package)</DisplayName>
-    <PublisherDisplayName>david</PublisherDisplayName>
+    <DisplayName>WinPlayer.WinUI</DisplayName>
+    <PublisherDisplayName>WinPlayer.WinUI</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
 
@@ -35,8 +35,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="WinPlayer.WinUI (Package)"
-        Description="WinPlayer.WinUI (Package)"
+        DisplayName="WinPlayer.WinUI"
+        Description="WinPlayer.WinUI 媒体播放器"
         BackgroundColor="transparent"
         Square150x150Logo="Images\Square150x150Logo.png"
         Square44x44Logo="Images\Square44x44Logo.png">

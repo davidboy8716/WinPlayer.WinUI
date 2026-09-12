@@ -19,7 +19,7 @@ public static class AppLogService
     private static readonly SemaphoreSlim WriteLock = new(1, 1);
     public static string LogPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "WinPlayer.WinUI", "Logs", "winplayer.log");
+        "WinPlayer.WinUI", "Logs", "winplayer" + AppMode.Suffix + ".log");
 
     public static void Information(string eventName, string message, object? details = null) =>
         _ = WriteAsync("Information", eventName, message, details, null);
@@ -103,7 +103,10 @@ public static class AppLogService
                 Directory.CreateDirectory(directory);
                 if (File.Exists(LogPath) && new FileInfo(LogPath).Length >= MaximumLogLength)
                 {
-                    string previousPath = Path.Combine(directory, "winplayer.previous.log");
+                    // 轮换目标必须同样带模式后缀：否则隐私模式的日志会被轮换进普通模式的文件，
+                    // 既破坏双模式隔离，也会与同时运行的普通模式实例互相抢同一个文件。
+                    string previousPath = Path.Combine(
+                        directory, "winplayer" + AppMode.Suffix + ".previous.log");
                     File.Move(LogPath, previousPath, true);
                 }
                 await File.AppendAllTextAsync(LogPath, line, Encoding.UTF8).ConfigureAwait(false);

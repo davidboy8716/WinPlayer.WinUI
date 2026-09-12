@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
@@ -30,23 +30,38 @@ namespace WinPlayer.WinUI
     /// </summary>
     public partial class App : Application
     {
-        // 互斥体用于确定主进程，命名管道负责把后续启动的文件参数转发给主进程。
-        private const string InstanceMutexName = "Local\\WinPlayer.WinUI.SingleInstance";
-        private const string InstancePipeName = "WinPlayer.WinUI.Activation";
+        // 模式化命名：普通模式无后缀，隐私模式带 ".b"（见 AppMode）。
+        // 两种模式因此拥有各自的单例与激活通道，互不激活、互不转发。
+        private static string InstanceMutexName => "Local\\WinPlayer.WinUI.SingleInstance" + AppMode.Suffix;
+        private static string InstancePipeName => "WinPlayer.WinUI.Activation" + AppMode.Suffix;
         private MainWindow? _window;
         private Mutex? _instanceMutex;
+
+        /// <summary>任务栏应用标识（AUMID）按模式设置，须在任何窗口创建之前调用。</summary>
+        [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int SetCurrentProcessExplicitAppUserModelID(string appUserModelId);
 
         /// <summary>
         /// 初始化应用程序单例，相当于传统桌面程序中的 main() 或 WinMain() 入口。
         /// </summary>
         public App()
         {
+            // 任务栏身份：两模式使用不同 AUMID，任务栏显示为两个独立按钮，
+            // 跳转列表/最近使用项也不会互相混入。必须在创建窗口之前设置。
+            int aumidResult = -1;
+            try { aumidResult = SetCurrentProcessExplicitAppUserModelID(AppMode.AppUserModelId); }
+            catch { /* 任务栏身份设置失败不影响播放功能 */ }
             InitializeComponent();
             UnhandledException += App_UnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-            AppLogService.Information("ApplicationStarted", "程序开始启动",
-                new { Arguments = Environment.GetCommandLineArgs() });
+            // 隐私模式不把媒体路径写进日志。
+            if (AppMode.IsPrivacy)
+                AppLogService.Information("ApplicationStarted", "程序开始启动",
+                    new { Mode = "privacy", ArgumentCount = Environment.GetCommandLineArgs().Length - 1, AppUserModelId = AppMode.AppUserModelId, AumidResult = aumidResult });
+            else
+                AppLogService.Information("ApplicationStarted", "程序开始启动",
+                    new { Arguments = Environment.GetCommandLineArgs(), AppUserModelId = AppMode.AppUserModelId, AumidResult = aumidResult });
         }
 
         private static void CurrentDomain_UnhandledException(
@@ -74,7 +89,7 @@ namespace WinPlayer.WinUI
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "WinPlayer.WinUI");
                 Directory.CreateDirectory(directory);
-                File.WriteAllText(System.IO.Path.Combine(directory, "startup-error.log"),
+                File.WriteAllText(System.IO.Path.Combine(directory, $"startup-error{AppMode.Suffix}.log"),
                     $"{DateTime.Now:O}\r\n{e.Exception}");
             }
             catch (Exception ex)
@@ -106,6 +121,20 @@ namespace WinPlayer.WinUI
             _window = new MainWindow(commandLineArguments);
             _window.Activate();
             if (settings.SingleInstance) _ = ListenForSecondaryInstancesAsync();
+            // 若此前注册过文件关联但程序目录被移动过，静默把注册表命令更新为当前路径。
+            // 隐私模式不触碰注册表。
+            if (AppMode.IsPrivacy) return;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    new WinPlayer.WinUI.Services.FileAssociationService().RefreshCommandPathsIfRegistered();
+                }
+                catch (Exception ex)
+                {
+                    AppLogService.Warning("FileAssociationRefreshFailed", "刷新文件关联路径失败", exception: ex);
+                }
+            });
         }
 
         private static async Task SendArgumentsToPrimaryInstanceAsync(string[] arguments)

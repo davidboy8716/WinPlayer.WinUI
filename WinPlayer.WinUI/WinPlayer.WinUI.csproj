@@ -4,6 +4,12 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>WinPlayer.WinUI</RootNamespace>
+    <!--
+      显式固定程序集名。默认值取自项目文件名，但历史版本曾把这里改成中文名
+      "WinUI3播放器"，导致发布出的 EXE 与 PRI 名称和 README、发布配置、
+      仓库名都不一致（PRI 名取自 $(AssemblyName)）。这里固定回 ASCII 名称。
+    -->
+    <AssemblyName>WinPlayer.WinUI</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
@@ -14,9 +20,23 @@
     <!-- “in”是旧发布目录的拼写错误；将其排除，避免残留二进制文件被写入 PRI。 -->
     <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;in\**</DefaultItemExcludes>
   </PropertyGroup>
+
   <ItemGroup>
     <Content Include="Images\player.ico">
       <!-- AppWindow.SetIcon 在运行时读取该文件，因此发布时必须将其放在可执行文件旁。 -->
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Images\player.b.ico">
+      <!-- 隐私模式窗口/任务栏图标（多尺寸 ICO，见 docs\tools\build-privacy-icon.ps1）。 -->
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- 透明光标资源：全屏自动隐藏鼠标指针时，CursorManager 用 LoadCursorFromFile 读取它，
+         再通过 SetSystemCursor 把全部系统光标形状替换为透明。
+         <Link> 固定其落地文件名为 blank.cur，发布时必须与可执行文件同目录。 -->
+    <Content Include="Cursors\blank.cur">
+      <Link>blank.cur</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
@@ -34,27 +54,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Properties\Resources.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Resources.resx</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Update="Images\player.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Update="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
+    <!-- 图标设计源图：只在重新生成 .ico 时作为输入使用（见 docs\tools\build-privacy-icon.ps1），
+         不是运行时资源。默认内容通配符会把 Images\ 下的 PNG 一律复制进构建与发布输出，
+         这里显式排除，避免每次发布多带约 670 KB 无用文件。 -->
+    <Content Remove="Images\player.b.png" />
+    <Content Remove="Images\player.c.png" />
   </ItemGroup>
 
-    <!-- 发布属性 -->
+  <!-- 发布属性 -->
   <PropertyGroup>
     <!-- WinUI/XAML 和 JSON 持久化服务依赖反射元数据，因此不启用裁剪。 -->
     <PublishReadyToRun>false</PublishReadyToRun>
@@ -64,9 +77,15 @@
   </PropertyGroup>
 
   <Target Name="CopyWinUiResourcesToPublishDirectory" AfterTargets="Publish">
+    <!--
+      未打包（unpackaged）发布不会自动带上 XAML 编译产物与 PRI 资源索引，
+      缺少其中任何一个都会让发布目录里的程序启动即失败，因此这里显式补齐。
+      .xbf 名称由 XAML 文件名决定，与 AssemblyName 无关，所以每个窗口都要单独列出。
+    -->
     <ItemGroup>
       <WinUiPublishResource Include="$(TargetDir)App.xbf" Condition="Exists('$(TargetDir)App.xbf')" />
       <WinUiPublishResource Include="$(TargetDir)MainWindow.xbf" Condition="Exists('$(TargetDir)MainWindow.xbf')" />
+      <WinUiPublishResource Include="$(TargetDir)SettingsWindow.xbf" Condition="Exists('$(TargetDir)SettingsWindow.xbf')" />
       <WinUiPublishResource Include="$(TargetDir)$(AssemblyName).pri" Condition="Exists('$(TargetDir)$(AssemblyName).pri')" />
     </ItemGroup>
     <Copy SourceFiles="@(WinUiPublishResource)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />

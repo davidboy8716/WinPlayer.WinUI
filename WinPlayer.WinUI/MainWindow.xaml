@@ -5,54 +5,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:WinPlayer.WinUI.Models"
     xmlns:effects="using:WinPlayer.WinUI.Effects"
-    Title="私有云播放器 WinUI">
+    Title="本地资源播放器">
 
     <Window.SystemBackdrop>
         <MicaBackdrop Kind="BaseAlt" />
     </Window.SystemBackdrop>
 
-    <Grid x:Name="Root" Background="Black" AllowDrop="True"
-          DragOver="Root_DragOver" Drop="Root_Drop">
+    <Grid x:Name="Root" Background="Black" AllowDrop="True" DragOver="Root_DragOver" Drop="Root_Drop">
         <Grid.Resources>
             <ResourceDictionary>
-                <ResourceDictionary.ThemeDictionaries>
-                    <ResourceDictionary x:Key="Light">
-                        <SolidColorBrush x:Key="PlayerChromeTextBrush" Color="#FFFFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeSecondaryTextBrush" Color="#C8FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeTertiaryTextBrush" Color="#88FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeStrokeBrush" Color="#38FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeButtonBrush" Color="#24FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeButtonHoverBrush" Color="#38FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeHandleBrush" Color="#E02B3039" />
-                        <SolidColorBrush x:Key="PlayerProgressBrush" Color="#FFFFB900" />
-                        <SolidColorBrush x:Key="PlayerMarkerBrush" Color="#FF2DA9FF" />
-                        <SolidColorBrush x:Key="PlayerPrimaryButtonGlyphBrush" Color="#FF111318" />
-                    </ResourceDictionary>
-                    <ResourceDictionary x:Key="Dark">
-                        <SolidColorBrush x:Key="PlayerChromeTextBrush" Color="#FFFFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeSecondaryTextBrush" Color="#C8FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeTertiaryTextBrush" Color="#88FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeStrokeBrush" Color="#38FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeButtonBrush" Color="#24FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeButtonHoverBrush" Color="#38FFFFFF" />
-                        <SolidColorBrush x:Key="PlayerChromeHandleBrush" Color="#E02B3039" />
-                        <SolidColorBrush x:Key="PlayerProgressBrush" Color="#FFFFB900" />
-                        <SolidColorBrush x:Key="PlayerMarkerBrush" Color="#FF2DA9FF" />
-                        <SolidColorBrush x:Key="PlayerPrimaryButtonGlyphBrush" Color="#FF111318" />
-                    </ResourceDictionary>
-                    <ResourceDictionary x:Key="HighContrast">
-                        <StaticResource x:Key="PlayerChromeTextBrush" ResourceKey="SystemColorWindowTextColorBrush" />
-                        <StaticResource x:Key="PlayerChromeSecondaryTextBrush" ResourceKey="SystemColorWindowTextColorBrush" />
-                        <StaticResource x:Key="PlayerChromeTertiaryTextBrush" ResourceKey="SystemColorGrayTextColorBrush" />
-                        <StaticResource x:Key="PlayerChromeStrokeBrush" ResourceKey="SystemColorWindowTextColorBrush" />
-                        <StaticResource x:Key="PlayerChromeButtonBrush" ResourceKey="SystemColorButtonFaceColorBrush" />
-                        <StaticResource x:Key="PlayerChromeButtonHoverBrush" ResourceKey="SystemColorHighlightColorBrush" />
-                        <StaticResource x:Key="PlayerChromeHandleBrush" ResourceKey="SystemColorButtonFaceColorBrush" />
-                        <StaticResource x:Key="PlayerProgressBrush" ResourceKey="SystemColorHighlightColorBrush" />
-                        <StaticResource x:Key="PlayerMarkerBrush" ResourceKey="SystemColorHotlightColorBrush" />
-                        <StaticResource x:Key="PlayerPrimaryButtonGlyphBrush" ResourceKey="SystemColorWindowColorBrush" />
-                    </ResourceDictionary>
-                </ResourceDictionary.ThemeDictionaries>
+                <!-- 播放器外观色板（Player* 主题资源）已上移到 App.xaml，主窗口与设置窗口共用。 -->
 
                 <Style x:Key="PlayerIconButtonStyle" TargetType="Button">
                     <Setter Property="Width" Value="38" />
@@ -121,11 +83,12 @@
 
         <!-- 隐藏的媒体传输控件；帧服务器输出由 MainWindow 负责绘制。 -->
         <MediaPlayerElement x:Name="PlayerElement" AreTransportControlsEnabled="False" Stretch="Uniform" />
-
+        
+        <!-- 空播放列表或停止时显示的交互框 -->
         <Grid Visibility="{x:Bind ViewModel.EmptyStateVisibility, Mode=OneWay}">
             <Border HorizontalAlignment="Center" VerticalAlignment="Center"
                     MinWidth="360" Padding="34,30" CornerRadius="20"
-                    Background="#B0181A20" BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
+                    Background="{ThemeResource PlayerEmptyCardBrush}" BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
                     BorderThickness="1">
                 <StackPanel HorizontalAlignment="Center" Spacing="12">
                     <Border Width="72" Height="72" CornerRadius="36"
@@ -147,7 +110,8 @@
                 </StackPanel>
             </Border>
         </Grid>
-
+        
+        <!-- 暂停时显示的播放按钮 -->
         <Border Width="88" Height="88" CornerRadius="44"
                 HorizontalAlignment="Center" VerticalAlignment="Center"
                 Background="#8A111318" BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
@@ -159,7 +123,8 @@
                       Margin="7,0,0,0" HorizontalAlignment="Center"
                       VerticalAlignment="Center" />
         </Border>
-
+        
+        <!-- 字幕覆盖层 -->
         <Border x:Name="SubtitleOverlay"
                 HorizontalAlignment="Center" VerticalAlignment="Bottom"
                 Margin="80,0,80,132" Padding="14,6" CornerRadius="6"
@@ -171,16 +136,16 @@
                        Foreground="{ThemeResource PlayerChromeTextBrush}" FontSize="24" TextAlignment="Center"
                        TextWrapping="Wrap" MaxWidth="1000" />
         </Border>
-
         <!-- 悬浮控制层通过 BackdropBlurBrush 采样视频画布。 -->
         <Border x:Name="TopBar" Height="52" VerticalAlignment="Top" Padding="14,0"
                 BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
                 BorderThickness="0,0,0,1">
             <Border.Background>
-                <effects:BackdropBlurBrush BlurAmount="26" TintColor="#181A20"
-                                           TintOpacity="0.35" FallbackColor="#E0181A20" />
+                <effects:BackdropBlurBrush BlurAmount="26"
+                                           TintColor="{ThemeResource PlayerTopTintColor}"
+                                           TintOpacity="0.35" FallbackColor="{ThemeResource PlayerTopFallbackColor}" />
             </Border.Background>
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,138">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,138">
                 <Image x:Name="AppLogo" Grid.Column="0" Source="/images/player.png"
                        Margin="0,0,12,0" Width="30" Height="30" />
                 <Button Grid.Column="1" Style="{StaticResource PlayerIconButtonStyle}"
@@ -219,9 +184,18 @@
                     <FontIcon Glyph="&#xE740;" FontSize="16"
                               FontFamily="{ThemeResource SymbolThemeFontFamily}" />
                 </Button>
+                <ToggleButton Grid.Column="6" x:Name="AlwaysOnTopToggle"
+                              Style="{StaticResource PlayerToggleButtonStyle}"
+                              Margin="8,0,0,0"
+                              Click="AlwaysOnTopToggle_Click"
+                              ToolTipService.ToolTip="窗口总在最前"
+                              AutomationProperties.Name="切换窗口总在最前">
+                    <FontIcon x:Name="AlwaysOnTopIcon" Glyph="&#xE718;" FontSize="16"
+                              FontFamily="{ThemeResource SymbolThemeFontFamily}" />
+                </ToggleButton>
             </Grid>
         </Border>
-
+        
         <!-- 文件夹根节点会持久化保存，展开节点时再延迟加载其子节点。 -->
         <Border x:Name="LeftSidebar" Width="286"
                 HorizontalAlignment="Left" Margin="0,52,0,112" Padding="12,14,12,10"
@@ -229,8 +203,9 @@
                 BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
                 BorderThickness="0,1,1,1">
             <Border.Background>
-                <effects:BackdropBlurBrush BlurAmount="30" TintColor="#1A1D24"
-                                           TintOpacity="0.42" FallbackColor="#E01A1D24" />
+                <effects:BackdropBlurBrush BlurAmount="30"
+                                           TintColor="{ThemeResource PlayerSidebarTintColor}"
+                                           TintOpacity="0.42" FallbackColor="{ThemeResource PlayerSidebarFallbackColor}" />
             </Border.Background>
             <Grid RowDefinitions="Auto,*,Auto">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="2,0,4,12">
@@ -293,15 +268,16 @@
             </Grid>
         </Border>
 
-        <!-- 播放列表与左侧文件夹树分别独立持久化。 -->
+        <!-- 右侧播放列表 -->
         <Border x:Name="RightSidebar" Width="320"
                 HorizontalAlignment="Right" Margin="0,52,0,112" Padding="12,14,12,10"
                 CornerRadius="14,0,0,14"
                 BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
                 BorderThickness="1,1,0,1">
             <Border.Background>
-                <effects:BackdropBlurBrush BlurAmount="30" TintColor="#1A1D24"
-                                           TintOpacity="0.42" FallbackColor="#E01A1D24" />
+                <effects:BackdropBlurBrush BlurAmount="30"
+                                           TintColor="{ThemeResource PlayerSidebarTintColor}"
+                                           TintOpacity="0.42" FallbackColor="{ThemeResource PlayerSidebarFallbackColor}" />
             </Border.Background>
             <Grid RowDefinitions="Auto,*,Auto">
                 <Grid Margin="4,0,4,12" ColumnDefinitions="Auto,*,Auto,Auto">
@@ -434,20 +410,21 @@
             </StackPanel>
         </Border>
 
-        <!-- 片头、片尾标记与播放进度条使用同一坐标空间。 -->
+        <!-- 底部控制栏。 -->
         <Border x:Name="ControlBar" Height="112" VerticalAlignment="Bottom" Padding="18,4,18,10"
                 BorderBrush="{ThemeResource PlayerChromeStrokeBrush}"
                 BorderThickness="0,1,0,0">
             <Border.Background>
-                <effects:BackdropBlurBrush BlurAmount="32" TintColor="#15171C"
-                                           TintOpacity="0.46" FallbackColor="#DE15171C" />
+                <effects:BackdropBlurBrush BlurAmount="32"
+                                           TintColor="{ThemeResource PlayerControlTintColor}"
+                                           TintOpacity="0.46" FallbackColor="{ThemeResource PlayerControlFallbackColor}" />
             </Border.Background>
             <Grid RowDefinitions="Auto,*">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                     <TextBlock Text="{x:Bind ViewModel.CurrentTime, Mode=OneWay}"
                                VerticalAlignment="Center" HorizontalAlignment="Center"
                                Foreground="{ThemeResource PlayerChromeSecondaryTextBrush}"
-                               FontFamily="Consolas" FontSize="13" Width="48" />
+                               FontFamily="Consolas" FontSize="12" MinWidth="40" />
                     <Slider x:Name="PositionSlider" Grid.Column="1" Margin="12,5,12,0"
                             Minimum="0" Maximum="{x:Bind ViewModel.Duration, Mode=OneWay}"
                             Value="{x:Bind ViewModel.Position, Mode=TwoWay}" VerticalAlignment="Center"
@@ -493,7 +470,7 @@
                     <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.DurationText, Mode=OneWay}"
                                VerticalAlignment="Center"
                                Foreground="{ThemeResource PlayerChromeSecondaryTextBrush}"
-                               FontFamily="Consolas" FontSize="13" MinWidth="48" TextAlignment="Right" />
+                               FontFamily="Consolas" FontSize="12" MinWidth="48" TextAlignment="Right" />
                 </Grid>
 
                 <Grid Grid.Row="1" ColumnDefinitions="*,Auto,*">
@@ -596,7 +573,7 @@
                                       FontFamily="{ThemeResource SymbolThemeFontFamily}" />
                         </Button>
                         <Button x:Name="AudioTrackButton" Style="{StaticResource PlayerIconButtonStyle}"
-                                ToolTipService.ToolTip="音频轨道"
+                                ToolTipService.ToolTip="音频轨道" Margin="0 0 20 0"
                                 AutomationProperties.Name="选择音频轨道">
                             <Button.Flyout>
                                 <MenuFlyout Opening="AudioMenuFlyout_Opening" />
@@ -604,7 +581,8 @@
                             <FontIcon Glyph="&#xED1F;" FontSize="16"
                                       FontFamily="{ThemeResource SymbolThemeFontFamily}" />
                         </Button>
-                        <Button Style="{StaticResource PlayerIconButtonStyle}"
+                        <Button CornerRadius="27" Padding="0"
+                                Background="Transparent"
                                 Command="{x:Bind ViewModel.ToggleMuteCommand}"
                                 ToolTipService.ToolTip="静音或恢复音量"
                                 AutomationProperties.Name="静音或恢复音量">
@@ -620,14 +598,16 @@
                 </Grid>
             </Grid>
         </Border>
-        <!-- 加载状态独立于短时操作消息，多个异步加载叠加时不会被提前关闭。 -->
+        
+        <!-- 状态消息提示栏，多个异步加载叠加时不会被提前关闭。 -->
         <Border HorizontalAlignment="Center" VerticalAlignment="Top"
                 Margin="24,5,24,0" MaxWidth="680" Padding="16,10"
                 Visibility="{x:Bind ViewModel.LoadingVisibility, Mode=OneWay}"
                 IsHitTestVisible="False" CornerRadius="8" Canvas.ZIndex="41">
             <Border.Background>
-                <effects:BackdropBlurBrush BlurAmount="28" TintColor="#181A20"
-                                           TintOpacity="0.38" FallbackColor="#E0181A20" />
+                <effects:BackdropBlurBrush BlurAmount="28"
+                                           TintColor="{ThemeResource PlayerTopTintColor}"
+                                           TintOpacity="0.38" FallbackColor="{ThemeResource PlayerTopFallbackColor}" />
             </Border.Background>
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <ProgressRing Width="18" Height="18" IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
@@ -646,9 +626,9 @@
                 BorderThickness="0" CornerRadius="8" Canvas.ZIndex="42">
             <Border.Background>
                 <effects:BackdropBlurBrush BlurAmount="28"
-                                   TintColor="#181A20"
+                                   TintColor="{ThemeResource PlayerTopTintColor}"
                                    TintOpacity="0.38"
-                                   FallbackColor="#E0181A20"/>
+                                   FallbackColor="{ThemeResource PlayerTopFallbackColor}"/>
             </Border.Background>
             <InfoBar x:Name="OperationInfoBar"
                      IsOpen="False" IsClosable="False"

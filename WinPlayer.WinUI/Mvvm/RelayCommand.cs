@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using WinPlayer.WinUI.Services;
 
 namespace WinPlayer.WinUI.Mvvm;
 
@@ -24,7 +25,16 @@ public sealed class AsyncRelayCommand(Func<Task> execute) : ICommand
         if (isRunning) return;
         isRunning = true;
         CanExecuteChanged?.Invoke(this, EventArgs.Empty);
-        try { await execute(); }
+        try
+        {
+            await execute();
+        }
+        catch (Exception ex)
+        {
+            // async void 的异常没有调用方可以接住，会直接冒泡到 WinUI 的未处理异常处理并结束进程。
+            // 这里记录后吞掉：单个命令失败不应拖垮整个播放器。
+            AppLogService.Error("AsyncCommandFailed", "命令执行失败", exception: ex);
+        }
         finally
         {
             isRunning = false;

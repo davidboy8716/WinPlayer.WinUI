@@ -10,7 +10,75 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- 其他合并资源字典可添加到此处。 -->
             </ResourceDictionary.MergedDictionaries>
-            <!-- 其他应用程序资源可添加到此处。 -->
+
+            <!--
+                播放器外观色板：主窗口与设置窗口共用，保证两窗口风格一致。
+                这里的配色刻意在浅色主题下也保持深色（参照系统媒体播放器：覆盖在画面上的
+                悬浮面板在浅色主题下依然深色），因此 Light 与 Dark 使用同一套值；
+                高对比度下改用系统颜色，并让蒙层透明以免遮挡系统配色。
+            -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="PlayerChromeTextBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeSecondaryTextBrush" Color="#C8FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeTertiaryTextBrush" Color="#88FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeStrokeBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeButtonBrush" Color="#24FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeButtonHoverBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeHandleBrush" Color="#E02B3039" />
+                    <SolidColorBrush x:Key="PlayerProgressBrush" Color="#FFFFB900" />
+                    <SolidColorBrush x:Key="PlayerMarkerBrush" Color="#FF2DA9FF" />
+                    <SolidColorBrush x:Key="PlayerPrimaryButtonGlyphBrush" Color="#FF111318" />
+                    <!-- 毛玻璃面板底色（浅色主题下同样保持深色） -->
+                    <Color x:Key="PlayerTopTintColor">#FF181A20</Color>
+                    <Color x:Key="PlayerTopFallbackColor">#E0181A20</Color>
+                    <Color x:Key="PlayerSidebarTintColor">#FF1A1D24</Color>
+                    <Color x:Key="PlayerSidebarFallbackColor">#E01A1D24</Color>
+                    <Color x:Key="PlayerControlTintColor">#FF15171C</Color>
+                    <Color x:Key="PlayerControlFallbackColor">#DE15171C</Color>
+                    <SolidColorBrush x:Key="PlayerEmptyCardBrush" Color="#B0181A20" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="PlayerChromeTextBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeSecondaryTextBrush" Color="#C8FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeTertiaryTextBrush" Color="#88FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeStrokeBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeButtonBrush" Color="#24FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeButtonHoverBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="PlayerChromeHandleBrush" Color="#E02B3039" />
+                    <SolidColorBrush x:Key="PlayerProgressBrush" Color="#FFFFB900" />
+                    <SolidColorBrush x:Key="PlayerMarkerBrush" Color="#FF2DA9FF" />
+                    <SolidColorBrush x:Key="PlayerPrimaryButtonGlyphBrush" Color="#FF111318" />
+                    <!-- 毛玻璃面板底色（深色版本） -->
+                    <Color x:Key="PlayerTopTintColor">#FF181A20</Color>
+                    <Color x:Key="PlayerTopFallbackColor">#E0181A20</Color>
+                    <Color x:Key="PlayerSidebarTintColor">#FF1A1D24</Color>
+                    <Color x:Key="PlayerSidebarFallbackColor">#E01A1D24</Color>
+                    <Color x:Key="PlayerControlTintColor">#FF15171C</Color>
+                    <Color x:Key="PlayerControlFallbackColor">#DE15171C</Color>
+                    <SolidColorBrush x:Key="PlayerEmptyCardBrush" Color="#B0181A20" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <StaticResource x:Key="PlayerChromeTextBrush" ResourceKey="SystemColorWindowTextColorBrush" />
+                    <StaticResource x:Key="PlayerChromeSecondaryTextBrush" ResourceKey="SystemColorWindowTextColorBrush" />
+                    <StaticResource x:Key="PlayerChromeTertiaryTextBrush" ResourceKey="SystemColorGrayTextColorBrush" />
+                    <StaticResource x:Key="PlayerChromeStrokeBrush" ResourceKey="SystemColorWindowTextColorBrush" />
+                    <StaticResource x:Key="PlayerChromeButtonBrush" ResourceKey="SystemColorButtonFaceColorBrush" />
+                    <StaticResource x:Key="PlayerChromeButtonHoverBrush" ResourceKey="SystemColorHighlightColorBrush" />
+                    <StaticResource x:Key="PlayerChromeHandleBrush" ResourceKey="SystemColorButtonFaceColorBrush" />
+                    <StaticResource x:Key="PlayerProgressBrush" ResourceKey="SystemColorHighlightColorBrush" />
+                    <StaticResource x:Key="PlayerMarkerBrush" ResourceKey="SystemColorHotlightColorBrush" />
+                    <StaticResource x:Key="PlayerPrimaryButtonGlyphBrush" ResourceKey="SystemColorWindowColorBrush" />
+                    <!-- 高对比度下毛玻璃蒙层保持透明，避免遮挡系统高对比配色。 -->
+                    <Color x:Key="PlayerTopTintColor">#00000000</Color>
+                    <Color x:Key="PlayerTopFallbackColor">#00000000</Color>
+                    <Color x:Key="PlayerSidebarTintColor">#00000000</Color>
+                    <Color x:Key="PlayerSidebarFallbackColor">#00000000</Color>
+                    <Color x:Key="PlayerControlTintColor">#00000000</Color>
+                    <Color x:Key="PlayerControlFallbackColor">#00000000</Color>
+                    <SolidColorBrush x:Key="PlayerEmptyCardBrush" Color="Transparent" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -1,0 +1,63 @@
+# https://editorconfig.org
+# WinPlayer.WinUI 代码风格约定。支持的编辑器（Visual Studio / VS Code / Rider）
+# 会自动读取本文件，无需额外配置。
+
+root = true
+
+[*]
+charset = utf-8
+# 仓库以 LF 规范化存储（见 .gitattributes），Windows 检出为 CRLF；
+# 这里与 Windows 版 Visual Studio / 本机 core.autocrlf=true 的默认行为保持一致。
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# ---- XML 类文件：2 空格缩进 ----
+[*.{xml,xaml,csproj,wapproj,props,targets,resx,manifest,appxmanifest,pubxml,config}]
+indent_size = 2
+
+# ---- 数据与配置：2 空格缩进 ----
+[*.{json,yml,yaml}]
+indent_size = 2
+
+# ---- 文档：不要去掉行尾空格（Markdown 用它表示换行） ----
+[*.md]
+indent_size = 2
+trim_trailing_whitespace = false
+
+# ---- C# ----
+[*.cs]
+indent_size = 4
+
+# using 指令：System.* 排在最前，且不与其余 using 之间插入空行
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# 不写 this. 限定符，不写 BCL 类型全名
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+
+# 隐式类型：内置类型写全名，类型显而易见时用 var
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# 大括号换行（Allman，与 Visual Studio 默认一致）
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# 优先使用表达式体成员与模式匹配
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+
+# 未使用的 using 提示
+dotnet_diagnostic.IDE0005.severity = suggestion

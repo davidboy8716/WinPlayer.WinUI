@@ -43,6 +43,9 @@ public sealed class PlaylistPersistenceService
 
     public void Save(IEnumerable<string> mediaPaths, IEnumerable<string> folderPaths)
     {
+        // 隐私模式对播放列表与媒体文件夹列表只读：不写回文件，从而与普通模式完全隔离。
+        // （唯一写入点都收口在这里，避免各处漏判。）
+        if (AppMode.IsPrivacy) return;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
