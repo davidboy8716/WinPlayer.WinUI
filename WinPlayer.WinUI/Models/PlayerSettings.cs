@@ -48,7 +48,9 @@ public sealed class PlayerSettings
     public double BlurAmount { get; set; } = 30;
     public double TintOpacity { get; set; } = 0.42;
     /// <summary>
-    /// 关闭本项目自己的字幕绘制（文本浮层与自绘图片字幕）。
+    /// 关闭本项目自己绘制的字幕层（文本浮层与外挂 .sup 图片字幕）。
+    /// 注意：片源内嵌的图片字幕（内嵌 PGS/VobSub）由系统解码、本程序只负责呈现，
+    /// 不受本项管辖；要关掉它请使用字幕菜单里的“关闭字幕”。
     /// 杜比视界引擎模式下字幕由 libmpv 渲染，若再叠加本项目的字幕会出现两行重合，
     /// 打开本项即可让字幕只由播放引擎负责。
     /// </summary>
@@ -64,6 +66,18 @@ public sealed class PlayerSettings
     public int EngineSubtitleOrdinal { get; set; }
     public double SubtitleBaseFontSize { get; set; } = 24;
     public double SubtitleBottomOffsetPercent { get; set; } = 17;
+    /// <summary>
+    /// 把本程序呈现的图片字幕（片源内嵌 PGS 由系统解码、外挂 .sup 由本程序解码）
+    /// 整体上移，按播放区域高度的百分比计算。0 表示完全按片源给定的位置显示。
+    /// 用途是当画面本身也带文字时，把字幕抬起来与它分开观察。
+    /// </summary>
+    public double SubtitleImageOffsetPercent { get; set; }
+    /// <summary>
+    /// 图片字幕只保留一行：0=关闭（整条提示照原样显示），1=只保留上一行，2=只保留下一行。
+    /// 用于片源把一句话排成两行、或一条提示里同时放了两种语言时，只留下想读的那一行。
+    /// 代价是分行的句子会少掉另一半。
+    /// </summary>
+    public int ImageSubtitleSingleLine { get; set; }
     public string SubtitleFontFamily { get; set; } = "Segoe UI";
     public double Volume { get; set; } = 80;
     public bool EnableVolumeFadeIn { get; set; } = true;

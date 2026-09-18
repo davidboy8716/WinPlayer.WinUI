@@ -244,7 +244,7 @@
 
             <TextBlock Text="字幕" Style="{StaticResource SectionTitleStyle}" />
             <controls:SettingsCard Header="本项目字幕"
-                                               Description="关闭后本程序不再绘制自己的字幕（文本浮层与图片字幕），字幕完全交给播放引擎/系统。杜比视界经 libmpv 引擎播放时，片源自带字幕已由引擎渲染，关闭本项可避免两行字幕重合">
+                                               Description="关闭后本程序不再绘制自己产生的字幕：文本浮层与外挂 .sup 图片字幕。片源内嵌的图片字幕（PGS/VobSub）由系统解码、本程序只负责呈现，不受本项影响，要关掉它请用字幕菜单里的「关闭字幕」。杜比视界经 libmpv 引擎播放时，片源自带字幕已由引擎渲染，关闭本项可避免两行字幕重合">
               <ToggleSwitch x:Name="OwnSubtitlesToggle" OnContent="显示" OffContent="关闭"
                                           AutomationProperties.Name="显示本项目字幕" />
             </controls:SettingsCard>
@@ -268,6 +268,23 @@
                                        Minimum="2" Maximum="50" SmallChange="1"
                                        Style="{StaticResource SettingsNumberBoxStyle}"
                                        AutomationProperties.Name="字幕距底部百分比" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="图片字幕上移"
+                                               Description="把图片字幕（片源内嵌 PGS/VobSub、外挂 .sup）整体上移，使用播放区域高度百分比。0 表示按片源给定位置显示；画面本身带文字时可调大以便把两者分开">
+              <NumberBox x:Name="SubtitleImageOffsetNumber"
+                                       Minimum="0" Maximum="50" SmallChange="1"
+                                       Style="{StaticResource SettingsNumberBoxStyle}"
+                                       AutomationProperties.Name="图片字幕上移百分比" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="图片字幕只保留一行"
+                                               Description="片源把一句话排成两行、或一条提示里同时放了两种语言时，只把选中的那一行显示出来。代价是分行的句子会少掉另一半">
+              <ComboBox x:Name="SubtitleSingleLineCombo" Width="200"
+                                        HorizontalAlignment="Right"
+                                        AutomationProperties.Name="图片字幕只保留一行">
+                <ComboBoxItem Content="显示整条提示" />
+                <ComboBoxItem Content="只保留上一行" />
+                <ComboBoxItem Content="只保留下一行" />
+              </ComboBox>
             </controls:SettingsCard>
 
             <TextBlock Text="毛玻璃" Style="{StaticResource SectionTitleStyle}" />

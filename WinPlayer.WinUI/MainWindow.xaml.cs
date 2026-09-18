@@ -79,6 +79,19 @@ public sealed partial class MainWindow : Window
     private byte[] mpvFrameBuffer = Array.Empty<byte>();
     private CanvasBitmap? pgsSubtitleBitmap;
     private PgsSubtitleImage? pgsSubtitleImage;
+    /// <summary>
+    /// 系统解码出的图片字幕（内嵌 PGS、VobSub 等）用的透明叠加位图。
+    /// 由 <c>MediaPlayer.RenderSubtitlesToSurface</c> 渲染后画到叠加画布上，不合成进视频表面。
+    /// **每次取帧都新建一张位图**：系统字幕渲染走媒体管线的 D3D 路径，与本程序在 Win2D 里的
+    /// 清屏不共用同一条命令流；复用同一张位图时，上一条字幕可能在本程序清屏之后才落盘，
+    /// 于是新旧两条字幕同时留在画面上——片源里位于不同高度、或前后两句文字不同的两条提示，
+    /// 叠起来就是「两种不同的字幕」。取帧频率约为每秒一次，新建位图的代价可以接受，
+    /// 换来的是「陈旧内容在物理上不可能出现」。
+    /// </summary>
+    private CanvasRenderTarget? platformSubtitleFrame;
+    /// <summary>上一代取帧用的位图：多留一代再释放，避免平台仍有在途写入打到已释放的纹理上。</summary>
+    private CanvasRenderTarget? platformSubtitleFrameRetired;
+    private bool platformSubtitleFailedLogged;
     private int folderTreeGeneration;
     // 将 MediaPlayer 帧服务器输出复制到此画布，使毛玻璃画刷能够采样视频内容。
     private readonly CanvasControl videoCanvas = new() { ClearColor = Colors.Black };
@@ -156,6 +169,8 @@ public sealed partial class MainWindow : Window
         Root.SizeChanged += Root_SizeChanged;
         videoCanvas.Draw += VideoCanvas_Draw;
         subtitleCanvas.Draw += SubtitleCanvas_Draw;
+        // 叠加画布是纯绘制层：不参与命中测试，避免它压在视频画布之上影响点击、拖动和滚轮。
+        subtitleCanvas.IsHitTestVisible = false;
         mediaPresenter = Root.FindName("PlayerElement") as MediaPlayerElement;
         // 视频画布放在最底部，字幕叠加画布紧随其后，其余 XAML 面板自然位于两者上方。
         Root.Children.Insert(0, videoCanvas);
@@ -224,6 +239,7 @@ public sealed partial class MainWindow : Window
                 Root.RemoveHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(Root_PointerWheelChanged));
                 videoFrame?.Dispose();
                 pgsSubtitleBitmap?.Dispose();
+                DisposePlatformSubtitleFrames();
                 mpvFrameBitmap?.Dispose();
                 videoCanvas.Draw -= VideoCanvas_Draw;
                 subtitleCanvas.Draw -= SubtitleCanvas_Draw;
@@ -595,8 +611,10 @@ public sealed partial class MainWindow : Window
             settings.HideOwnSubtitles = !ownSubtitles.IsChecked;
             settingsService.Save(settings);
             ViewModel.ApplyOwnSubtitleSetting();
+            // 字幕层整层由本程序绘制，开关变化后必须重绘叠加画布才会立刻看到效果。
+            subtitleCanvas.Invalidate();
             ViewModel.ShowNotification(settings.HideOwnSubtitles
-                ? "已关闭本项目字幕（字幕由播放引擎负责）"
+                ? "已关闭本项目字幕（片源内嵌图片字幕仍会显示，可用「关闭字幕」关闭）"
                 : "已开启本项目字幕");
         };
         menu.Items.Add(ownSubtitles);
@@ -607,7 +625,12 @@ public sealed partial class MainWindow : Window
             Text = "关闭字幕",
             IsChecked = ViewModel.AreSubtitlesOff()
         };
-        disabled.Click += (_, _) => ViewModel.SelectSubtitleTrack(-1);
+        // 字幕状态刚被改成“关闭”，必须立刻重绘叠加画布，否则旧字幕会留在画面上不消失。
+        disabled.Click += (_, _) =>
+        {
+            ViewModel.SelectSubtitleTrack(-1);
+            subtitleCanvas.Invalidate();
+        };
         menu.Items.Add(disabled);
 
         IReadOnlyList<MediaTrackOption> tracks = ViewModel.GetSubtitleTrackOptions();
@@ -615,7 +638,12 @@ public sealed partial class MainWindow : Window
         {
             var item = new ToggleMenuFlyoutItem { Text = track.DisplayName, IsChecked = track.IsSelected };
             int index = track.Index;
-            item.Click += (_, _) => ViewModel.SelectSubtitleTrack(index);
+            item.Click += (_, _) =>
+            {
+                ViewModel.SelectSubtitleTrack(index);
+                // 同理：切轨后立刻重绘，开启字幕不必等到下一条字幕才出现。
+                subtitleCanvas.Invalidate();
+            };
             menu.Items.Add(item);
         }
         if (tracks.Count == 0)
@@ -1064,13 +1092,22 @@ public sealed partial class MainWindow : Window
 
     private void MediaPlayer_VideoFrameAvailable(MediaPlayer sender, object args)
     {
+        // 只重绘视频画布。字幕画布不能跟着视频帧走：那样每帧都要清屏、取一次字幕帧、
+        // 再合成一整层，等于凭空多出一整屏的工作量，会拖出可见的卡顿。
+        // 字幕只在真正变化时才重绘（见 MediaPlayer_SubtitleFrameChanged）。
         DispatcherQueue.TryEnqueue(() => videoCanvas.Invalidate());
     }
 
     private void MediaPlayer_SubtitleFrameChanged(MediaPlayer sender, object args)
     {
-        // 暂停状态下视频帧不会持续刷新，字幕帧变化时仍需主动重绘画布。
-        DispatcherQueue.TryEnqueue(() => videoCanvas.Invalidate());
+        // 暂停状态下视频帧不会持续刷新，字幕帧变化时仍需主动重绘。
+        // 字幕画在叠加画布上，因此两张画布都要重绘：视频画布负责暂停时的画面刷新，
+        // 叠加画布负责字幕本身。
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            videoCanvas.Invalidate();
+            subtitleCanvas.Invalidate();
+        });
     }
 
     /// <summary>
@@ -1217,10 +1254,6 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.MediaPlayer.CopyFrameToVideoSurface(videoFrame,
                 new Windows.Foundation.Rect(left, top, drawWidth, drawHeight));
-            // 帧服务器模式不会自动呈现 SUP/PGS、VobSub 等图片字幕，
-            // 将系统生成的字幕帧直接合成到同一视频表面。
-            ViewModel.MediaPlayer.RenderSubtitlesToSurface(videoFrame,
-                new Windows.Foundation.Rect(left, top, drawWidth, drawHeight));
         }
         catch (COMException)
         {
@@ -1229,21 +1262,218 @@ public sealed partial class MainWindow : Window
 
         args.DrawingSession.DrawImage(videoFrame,
             new Windows.Foundation.Rect(0, 0, width, height), videoFrame.Bounds);
-
-        // 帧服务器模式不会自动呈现 SUP/PGS 等图片字幕，因此叠加在同一画布上绘制。
-        DrawPgsSubtitle(args.DrawingSession, width, height);
+        // 字幕一律不画在这里：本画布位于控制层之下，字幕改由叠加画布（SubtitleCanvas_Draw）
+        // 统一绘制，避免同一句话被两个层各画一遍。
     }
 
     private void SubtitleCanvas_Draw(CanvasControl sender, CanvasDrawEventArgs args)
     {
-        // 直通模式下视频由系统呈现，叠加画布保持透明，只绘制自绘的图片字幕。
+        // 叠加画布只画字幕，其余部分保持透明。
         args.DrawingSession.Clear(Colors.Transparent);
+        // 同一时刻只允许一个字幕绘制方，避免同一句话被两个来源各画一遍：
+        // 引擎模式下字幕由 libmpv 渲染；内嵌图片字幕用系统解码出的字幕帧（本程序只负责呈现）；
+        // 外挂 .sup 由本程序自己解码后绘制；文本字幕由 XAML 浮层绘制，不在这张画布上。
+        if (ViewModel.IsMpvEngineActive) return;
+        if (DrawPlatformSubtitle(sender, args.DrawingSession)) return;
         DrawPgsSubtitle(args.DrawingSession, (float)sender.ActualWidth, (float)sender.ActualHeight);
     }
 
     /// <summary>
-    /// 绘制自绘的 SUP/PGS 图片字幕。帧服务器模式下与视频帧同画布绘制，
-    /// 直通模式下由独立叠加画布绘制，两处共用同一套缩放与定位计算。
+    /// 绘制片源自带的图片字幕（内嵌 PGS、VobSub 等），返回本次绘制是否由它承担。
+    /// 内容是系统解码出来的，本程序只负责把它呈现到画面上，因此**不受「本项目字幕」开关管辖**：
+    /// 那个开关管的是本程序自己产生的字幕（文本浮层、外挂 .sup）。要关掉这条字幕，
+    /// 请使用字幕菜单里的「关闭字幕」。
+    /// 帧服务器模式不会把这类字幕自动呈现到画面里，需要主动取帧；这里把它渲染到一张
+    /// 独立透明位图上再叠加，而不是合成进视频表面，原因是合成进视频表面后字幕就成了画面的
+    /// 一部分，既无法单独控制，也很容易在别处再画一份时叠成两行。
+    /// 直通模式下系统会在同一管线里呈现字幕，本程序必须让位。
+    /// </summary>
+    private bool DrawPlatformSubtitle(CanvasControl sender, CanvasDrawingSession session)
+    {
+        // 没有活动的图片字幕轨（关掉了字幕、或当前是文本/外挂字幕）时直接不画：
+        // 不去取系统字幕帧，画面立刻干净，不依赖系统是否重新生成字幕帧。
+        if (settings.HdrDirectPresent || ViewModel.IsMpvEngineActive ||
+            !ViewModel.IsPlatformImageSubtitleActive)
+        {
+            DisposePlatformSubtitleFrames();
+            return false;
+        }
+
+        float width = (float)sender.ActualWidth;
+        float height = (float)sender.ActualHeight;
+        if (width < 1 || height < 1) return false;
+
+        uint sourceWidth = ViewModel.MediaPlayer.PlaybackSession.NaturalVideoWidth;
+        uint sourceHeight = ViewModel.MediaPlayer.PlaybackSession.NaturalVideoHeight;
+        if (sourceWidth == 0 || sourceHeight == 0) return false;
+
+        // 本次取帧新建一张位图：上一代系统写入即使迟到，也只会落在上一代那张已经画过的位图上。
+        CanvasRenderTarget? frame = CreatePlatformSubtitleFrame(sender, width, height);
+        if (frame is null) return false;
+
+        // 与视频画布一致：绘制矩形按位图的物理像素计算，字幕才能落在正确的缩放位置上。
+        float targetWidth = frame.SizeInPixels.Width;
+        float targetHeight = frame.SizeInPixels.Height;
+        float scale = Math.Min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+        float drawWidth = sourceWidth * scale;
+        float drawHeight = sourceHeight * scale;
+        float left = (targetWidth - drawWidth) / 2;
+        float top = (targetHeight - drawHeight) / 2;
+
+        try
+        {
+            ViewModel.MediaPlayer.RenderSubtitlesToSurface(frame,
+                new Windows.Foundation.Rect(left, top, drawWidth, drawHeight));
+        }
+        catch (COMException ex)
+        {
+            // 只在首次失败时记录，避免每帧刷日志；取字幕帧失败时画面照常显示，只是没有字幕。
+            if (!platformSubtitleFailedLogged)
+            {
+                platformSubtitleFailedLogged = true;
+                AppLogService.Warning("PlatformSubtitleRenderFailed",
+                    "获取系统图片字幕帧失败，本次播放将不显示图片字幕", null, ex);
+            }
+            frame.Dispose();
+            return false;
+        }
+
+        // 可选上移：把这一层整体抬高，「图片字幕上移」为 0 时完全按片源给定的位置显示。
+        double offsetY = height * Math.Clamp(settings.SubtitleImageOffsetPercent, 0, 50) / 100.0;
+
+        // 「图片字幕只保留一行」：多行提示时只把选中的那一行画出去。
+        // 裁剪只发生在绘制这一步，位图本身不动，所以不影响其它任何逻辑。
+        (int X, int Y, int W, int H)? line = TryGetSingleSubtitleLine(frame);
+        if (line is { } band)
+        {
+            // 行带是按物理像素量出来的，而 DrawImage 的源矩形使用位图的 DIP 坐标。
+            double dipPerPixelX = frame.Size.Width / targetWidth;
+            double dipPerPixelY = frame.Size.Height / targetHeight;
+            var source = new Windows.Foundation.Rect(
+                band.X * dipPerPixelX, band.Y * dipPerPixelY,
+                band.W * dipPerPixelX, band.H * dipPerPixelY);
+            session.DrawImage(frame,
+                new Windows.Foundation.Rect(source.X, source.Y - offsetY, source.Width, source.Height),
+                source);
+            RetirePlatformSubtitleFrame(frame);
+            return true;
+        }
+
+        session.DrawImage(frame,
+            new Windows.Foundation.Rect(0, -offsetY, width, height), frame.Bounds);
+        RetirePlatformSubtitleFrame(frame);
+        return true;
+    }
+
+    /// <summary>
+    /// 为本次取帧新建一张已清空的透明位图；只有创建失败时返回 null，此时本次不画图片字幕。
+    /// </summary>
+    private CanvasRenderTarget? CreatePlatformSubtitleFrame(
+        CanvasControl sender, float width, float height)
+    {
+        try
+        {
+            var frame = new CanvasRenderTarget(sender, width, height);
+            using (CanvasDrawingSession clearSession = frame.CreateDrawingSession())
+                clearSession.Clear(Colors.Transparent);
+            return frame;
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Warning("PlatformSubtitleFrameAllocFailed",
+                "创建图片字幕叠加位图失败", null, ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 把刚画完的这一张登记为「当前帧」，上一代顺延为「退休帧」。
+    /// 退休帧再留一代才释放：系统字幕写入可能略晚于本程序的调用返回，
+    /// 立刻释放会让那次迟到写入打到已释放的纹理上。
+    /// </summary>
+    private void RetirePlatformSubtitleFrame(CanvasRenderTarget frame)
+    {
+        if (ReferenceEquals(frame, platformSubtitleFrame)) return;
+        platformSubtitleFrameRetired?.Dispose();
+        platformSubtitleFrameRetired = platformSubtitleFrame;
+        platformSubtitleFrame = frame;
+    }
+
+    private void DisposePlatformSubtitleFrames()
+    {
+        platformSubtitleFrame?.Dispose();
+        platformSubtitleFrame = null;
+        platformSubtitleFrameRetired?.Dispose();
+        platformSubtitleFrameRetired = null;
+    }
+
+    /// <summary>
+    /// 按行统计不透明像素，把连续的非空行合并成「字幕行带」。一条多行提示在同一张位图里
+    /// 就表现为若干条互不相连的行带。
+    /// </summary>
+    private static List<(int Start, int End)> FindSubtitleBands(
+        byte[] pixels, int pixelWidth, int pixelHeight)
+    {
+        var bands = new List<(int Start, int End)>();
+        if (pixelWidth <= 0 || pixelHeight <= 0) return bands;
+
+        var rows = new int[pixelHeight];
+        for (int i = 0; i + 3 < pixels.Length; i += 4)
+        {
+            if (pixels[i + 3] == 0) continue;
+            int row = (i / 4) / pixelWidth;
+            if (row < pixelHeight) rows[row]++;
+        }
+
+        int start = -1;
+        for (int y = 0; y < pixelHeight; y++)
+        {
+            bool has = rows[y] >= 3;
+            if (has && start < 0) start = y;
+            else if (!has && start >= 0)
+            {
+                if (y - start >= 4) bands.Add((start, y - 1));
+                start = -1;
+            }
+        }
+        if (start >= 0) bands.Add((start, pixelHeight - 1));
+        return bands;
+    }
+
+    /// <summary>
+    /// 按「图片字幕只保留一行」的设置挑出要保留的那一行，返回它在位图里的像素范围。
+    /// 返回 null 表示不需要裁剪：选项关闭，或这一帧本身就切不开（只有一行、行与行黏连在一起）。
+    /// </summary>
+    private (int X, int Y, int W, int H)? TryGetSingleSubtitleLine(CanvasRenderTarget target)
+    {
+        int mode = settings.ImageSubtitleSingleLine;
+        if (mode is not (1 or 2)) return null;
+
+        int pixelWidth = (int)target.SizeInPixels.Width;
+        int pixelHeight = (int)target.SizeInPixels.Height;
+        if (pixelWidth <= 0 || pixelHeight <= 0) return null;
+
+        byte[] pixels = target.GetPixelBytes();
+        List<(int Start, int End)> bands = FindSubtitleBands(pixels, pixelWidth, pixelHeight);
+        if (bands.Count < 2) return null;
+
+        (int Start, int End) band = mode == 1 ? bands[0] : bands[^1];
+        int minX = int.MaxValue, maxX = -1;
+        for (int y = band.Start; y <= band.End; y++)
+        for (int x = 0; x < pixelWidth; x++)
+        {
+            if (pixels[(y * pixelWidth + x) * 4 + 3] == 0) continue;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+        }
+        if (maxX < 0) return null;
+        return (minX, band.Start, maxX - minX + 1, band.End - band.Start + 1);
+    }
+
+    /// <summary>
+    /// 绘制本项目自绘的 SUP/PGS 图片字幕（外挂 .sup，由 PgsSubtitleDecoder 解码）。
+    /// 只在叠加画布上绘制，与系统解码出的字幕（DrawPlatformSubtitle）共用同一套定位计算，
+    /// 两者不会同时出现：同一时刻只有一个字幕来源是激活的。
     /// </summary>
     private void DrawPgsSubtitle(CanvasDrawingSession session, float canvasWidth, float canvasHeight)
     {
@@ -1271,7 +1501,9 @@ public sealed partial class MainWindow : Window
         double subtitleLeft = displayLeft +
             pgsSubtitleImage.X / (double)pgsSubtitleImage.CanvasWidth * displayWidth;
         double subtitleTop = displayTop +
-            pgsSubtitleImage.Y / (double)pgsSubtitleImage.CanvasHeight * displayHeight;
+            pgsSubtitleImage.Y / (double)pgsSubtitleImage.CanvasHeight * displayHeight -
+            // 与片源内嵌图片字幕共用同一个“图片字幕上移”设置。
+            canvasHeight * Math.Clamp(settings.SubtitleImageOffsetPercent, 0, 50) / 100.0;
         double subtitleWidth =
             pgsSubtitleImage.Width / (double)pgsSubtitleImage.CanvasWidth * displayWidth;
         double subtitleHeight =
@@ -1306,7 +1538,9 @@ public sealed partial class MainWindow : Window
             mediaPresenter.Visibility = direct ? Visibility.Visible : Visibility.Collapsed;
         }
         videoCanvas.Visibility = direct ? Visibility.Collapsed : Visibility.Visible;
-        subtitleCanvas.Visibility = direct ? Visibility.Visible : Visibility.Collapsed;
+        // 叠加画布在两种模式下都保留：它现在承担全部图片字幕的绘制
+        // （自绘模式画系统解码出的字幕帧，直通模式画本项目自绘的 .sup 字幕）。
+        subtitleCanvas.Visibility = Visibility.Visible;
     }
 
     private void MediaPlayer_MediaOpenedDiagnostics(MediaPlayer sender, object args) =>
@@ -1374,8 +1608,19 @@ public sealed partial class MainWindow : Window
         // 避免文件选择器只提供其中一部分、与 README 声明的支持范围不一致。
         foreach (string extension in SupportedMedia.MediaExtensions)
             picker.FileTypeFilter.Add(extension);
-        var files = await picker.PickMultipleFilesAsync();
-        return files.ToList();
+        try
+        {
+            var files = await picker.PickMultipleFilesAsync();
+            return files.ToList();
+        }
+        catch (Exception ex)
+        {
+            // 选择器失败（如无窗口句柄、被系统策略拒绝）以前只会写进日志，界面上表现为
+            // “点了按钮没反应”。这里必须让用户看到原因，并给出可行的替代入口。
+            AppLogService.Error("MediaFilePickerFailed", "打开媒体文件选择器失败", exception: ex);
+            ViewModel.ShowNotification("无法打开媒体文件选择器，请改用拖放文件或双击左侧文件夹", true);
+            return Array.Empty<StorageFile>();
+        }
     }
 
     /// <summary>把界面主题（浅色/深色/跟随系统）应用到窗口根元素。</summary>
@@ -1569,6 +1814,7 @@ public sealed partial class MainWindow : Window
         ViewModel.ApplyRenderModeSetting();
         ApplyVideoRenderMode();
         ViewModel.ApplyOwnSubtitleSetting();
+        subtitleCanvas.Invalidate();
         if (settingsWindowDirectPresentBaseline != settings.HdrDirectPresent)
             ViewModel.ReloadCurrentMediaForRenderMode();
         if (ViewModel.HasCurrentMedia) ReportHdrDiagnostics();

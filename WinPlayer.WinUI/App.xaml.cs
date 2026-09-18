@@ -39,6 +39,10 @@ namespace WinPlayer.WinUI
             try { aumidResult = SetCurrentProcessExplicitAppUserModelID(AppMode.AppUserModelId); }
             catch { /* 任务栏身份设置失败不影响播放功能 */ }
             InitializeComponent();
+            // 全屏隐藏指针是把全局系统光标替换成透明光标；若上一次运行在隐藏期间被强杀或崩溃，
+            // 透明光标会残留在系统里（见 CursorManager.RestoreSystemCursorsOnStartup），
+            // 这里在创建任何窗口之前先无条件还原一次。
+            CursorManager.RestoreSystemCursorsOnStartup();
             UnhandledException += App_UnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;

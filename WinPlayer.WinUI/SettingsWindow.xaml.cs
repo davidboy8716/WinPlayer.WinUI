@@ -377,6 +377,9 @@ public sealed partial class SettingsWindow : Window
             SubtitleBaseFontSizeNumber, settings.SubtitleBaseFontSize, 12, 72);
         settings.SubtitleBottomOffsetPercent = ReadNumber(
             SubtitleBottomOffsetNumber, settings.SubtitleBottomOffsetPercent, 2, 50);
+        settings.SubtitleImageOffsetPercent = ReadNumber(
+            SubtitleImageOffsetNumber, settings.SubtitleImageOffsetPercent, 0, 50);
+        settings.ImageSubtitleSingleLine = Math.Clamp(SubtitleSingleLineCombo.SelectedIndex, 0, 2);
         settings.SubtitleFontFamily = SubtitleFontFamilyCombo.SelectedItem as string
             ?? settings.SubtitleFontFamily;
         settings.HistoryRetentionDays = (int)Math.Round(ReadNumber(
@@ -415,6 +418,8 @@ public sealed partial class SettingsWindow : Window
         TintOpacityNumber.Value = settings.TintOpacity;
         SubtitleBaseFontSizeNumber.Value = settings.SubtitleBaseFontSize;
         SubtitleBottomOffsetNumber.Value = settings.SubtitleBottomOffsetPercent;
+        SubtitleImageOffsetNumber.Value = settings.SubtitleImageOffsetPercent;
+        SubtitleSingleLineCombo.SelectedIndex = Math.Clamp(settings.ImageSubtitleSingleLine, 0, 2);
         HistoryRetentionNumber.Value = settings.HistoryRetentionDays;
         MaxHistoryEntriesNumber.Value = settings.MaxPlaybackHistoryEntries;
     }

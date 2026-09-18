@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using WinPlayer.WinUI.Services;
 
 namespace WinPlayer.WinUI;
 
@@ -35,6 +36,8 @@ public sealed class CursorManager
     };
 
     private const uint SPI_SETCURSORS = 0x0057;
+    /// <summary>把设置变更广播给所有窗口，确保其它程序也重新加载光标。</summary>
+    private const uint SPIF_SENDCHANGE = 0x02;
 
     // ---- Win32 ----
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -80,6 +83,28 @@ public sealed class CursorManager
     public CursorManager(Func<IntPtr> windowHandle)
     {
         this.windowHandle = windowHandle;
+    }
+
+    /// <summary>
+    /// 启动时无条件按当前主题还原整套系统光标。
+    /// 隐藏指针用的是 <c>SetSystemCursor</c>，改的是**全局**系统光标，而本类记录隐藏状态的
+    /// <c>cursorsSwappedToBlank</c> 每次启动都从 false 开始——也就是说，只要上一次运行在
+    /// 隐藏期间被强制结束（任务管理器结束进程、调试时 Stop-Process、崩溃），透明光标就会
+    /// 一直留在系统里，本程序再也认不出来、也就永远不会去还原，用户会以为鼠标指针消失了。
+    /// 因此启动时先无条件还原一次：这一步是幂等的，正常退出后调用它只是重新加载当前光标方案。
+    /// </summary>
+    public static void RestoreSystemCursorsOnStartup()
+    {
+        try
+        {
+            if (SystemParametersInfo(SPI_SETCURSORS, 0, IntPtr.Zero, SPIF_SENDCHANGE)) return;
+            AppLogService.Warning("CursorRestoreOnStartupFailed", "启动时还原系统光标失败",
+                new { LastError = Marshal.GetLastWin32Error() });
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Warning("CursorRestoreOnStartupFailed", "启动时还原系统光标失败", null, ex);
+        }
     }
 
     /// <summary>隐藏指针：把全部系统光标形状替换为透明光标。</summary>

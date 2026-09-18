@@ -1208,20 +1208,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (files.Count == 0) return;
         using IDisposable loading = BeginLoading("正在加载媒体文件…");
         SelectedItem = null;
-        Playlist.ReplaceAll(files
+        var items = files
             .Where(IsSupportedMedia)
             .DistinctBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
-            .Select(CreatePlaylistItem));
+            .Select(CreatePlaylistItem)
+            .ToList();
+        Playlist.ReplaceAll(items);
         StartPlaylistHistoryResolution(Playlist);
         Folders.ReplaceAll(files
             .Select(file => System.IO.Path.GetDirectoryName(file.Path))
             .Where(folder => !string.IsNullOrWhiteSpace(folder))
             .Select(folder => folder!)
             .Distinct(StringComparer.OrdinalIgnoreCase));
-        // 不主动展开播放列表侧栏，保持“悬停/手动展开”的一致行为。
+        // 此处有意不展开播放列表侧栏，保持“悬停/手动展开”的一致行为。
+        // 随后选中第一项立即开始播放，与拖放文件、命令行打开的行为保持一致。
+        PlaylistItem? firstItem = items.FirstOrDefault();
+        if (firstItem is null)
+        {
+            // 选中的文件都不受支持：恢复引导卡片，否则只剩一块无法再操作的黑屏。
+            EmptyStateVisibility = IsMediaOpen ? Visibility.Collapsed : Visibility.Visible;
+            Notify("所选文件中没有可播放的媒体文件", true);
+            return;
+        }
+
+        // 与拖放、命令行打开一致：选中首项并强制开始播放（即使关闭了“自动播放”）。
+        forcePlayOnMediaOpened = true;
+        SelectedItem = firstItem;
         EmptyStateVisibility = Visibility.Collapsed;
         ShowChrome();
-        Notify($"已加载 {Playlist.Count} 个媒体文件");
+        Notify($"已加载并播放 {Playlist.Count} 个媒体文件");
     }
 
     /// <summary>显示可叠加的加载状态；最后一个加载操作结束后自动隐藏。</summary>
@@ -1559,9 +1574,83 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             AudioTrack track = playbackItem.AudioTracks[index];
             string name = string.IsNullOrWhiteSpace(track.Label) ? $"音轨 {index + 1}" : track.Label;
             if (!string.IsNullOrWhiteSpace(track.Language)) name += $" ({track.Language})";
+            // 系统没有该编码所用的解码器时（例如 TrueHD），选中它只会得到静音；
+            // 在菜单里直接标出来，用户就不必反复切换去猜为什么没声音。
+            if (!IsAudioTrackDecodable(track)) name += "（系统无解码器，无声音）";
             result.Add(new MediaTrackOption(index, name, playbackItem.AudioTracks.SelectedIndex == index));
         }
         return result;
+    }
+
+    /// <summary>
+    /// 该音轨能否真正出声。<see cref="AudioTrackSupportInfo.DecoderStatus"/> 取
+    /// <c>FullySupported</c> 或 <c>Degraded</c>（例如降混成立体声）时系统能解码；
+    /// <c>UnsupportedSubtype</c> / <c>Unsupported</c> 意味着系统会选中该轨却没有对应解码器，
+    /// 只会输出静音。取不到支持信息时按可用处理，避免误切。
+    /// </summary>
+    private static bool IsAudioTrackDecodable(AudioTrack track)
+    {
+        AudioTrackSupportInfo? support = track.SupportInfo;
+        if (support is null) return true;
+        return support.DecoderStatus is MediaDecoderStatus.FullySupported or MediaDecoderStatus.Degraded;
+    }
+
+    /// <summary>音轨在提示信息里的显示名（与音频菜单的默认命名保持一致）。</summary>
+    private static string DescribeAudioTrack(AudioTrack track, int index) =>
+        string.IsNullOrWhiteSpace(track.Label) ? $"音轨 {index + 1}" : track.Label;
+
+    /// <summary>
+    /// 打开媒体后校正音轨选择。容器把哪条音轨标为默认并不代表系统能解码它：
+    /// 实测的港版蓝光 REMUX 中，MKV 只把 TrueHD 轨标为默认（两条 AC3 轨显式 default=0），
+    /// 而系统媒体框架对 TrueHD 报 <c>DecoderStatus=UnsupportedSubtype</c>，
+    /// 于是播放器一打开就选中了一条不可能出声的音轨——表现为“音轨 1 没有声音”。
+    /// 这里在默认音轨不可解码时自动改选第一条可解码的音轨并提示用户；
+    /// 用户仍可在音频菜单里手动切回（菜单会标注该轨系统无解码器）。
+    /// </summary>
+    private void ApplyDecodableAudioTrack()
+    {
+        if (playbackItem is null) return;
+        var tracks = playbackItem.AudioTracks;
+        if (tracks.Count == 0) return;
+
+        int current = tracks.SelectedIndex;
+        if (current >= 0 && current < tracks.Count && IsAudioTrackDecodable(tracks[current])) return;
+
+        int fallback = -1;
+        for (int index = 0; index < tracks.Count; index++)
+        {
+            if (!IsAudioTrackDecodable(tracks[index])) continue;
+            fallback = index;
+            break;
+        }
+        if (fallback < 0) return;
+
+        tracks.SelectedIndex = fallback;
+        string rejected = current >= 0 && current < tracks.Count
+            ? DescribeAudioTrack(tracks[current], current) : "默认音轨";
+        string chosen = DescribeAudioTrack(tracks[fallback], fallback);
+        AppLogService.Information("AudioTrackAutoFallback", "默认音轨系统无法解码，已自动切换到可解码音轨",
+            new { RejectedIndex = current, Rejected = rejected, SelectedIndex = fallback, Selected = chosen });
+        // 打开媒体时会紧接着弹出“HDR / 杜比诊断”提示，两者共用同一条信息栏、后一条覆盖前一条，
+        // 因此这条必须等前一条自动收起后再弹，否则用户根本看不到换轨的原因。
+        _ = NotifyAfterStartupInfoBarAsync($"{rejected} 系统无解码器，已切换到 {chosen}");
+    }
+
+    /// <summary>信息栏（InfoBar）自动收起的时长，与 <c>MainWindow.notificationTimer</c> 的间隔一致。</summary>
+    private const int InfoBarLifetimeMilliseconds = 2600;
+
+    /// <summary>等信息栏上的上一条提示自动收起后再显示，避免被紧接着的提示覆盖掉。</summary>
+    private async Task NotifyAfterStartupInfoBarAsync(string message)
+    {
+        try
+        {
+            await Task.Delay(InfoBarLifetimeMilliseconds).ConfigureAwait(false);
+            dispatcherQueue.TryEnqueue(() => Notify(message));
+        }
+        catch (Exception ex)
+        {
+            AppLogService.Warning("DeferredNotificationFailed", "延迟提示发送失败", new { message }, ex);
+        }
     }
 
     public IReadOnlyList<MediaTrackOption> GetSubtitleTrackOptions()
@@ -1610,6 +1699,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IsMpvEngineActive && mpvEngine is not null
             ? mpvEngine.SubtitlesExplicitlyOff
             : GetSubtitleTrackOptions().All(track => !track.IsSelected);
+
+    /// <summary>
+    /// 当前是否有一条**图片**字幕轨正由系统呈现——也就是界面该不该去取系统字幕帧。
+    /// 只有内嵌的图片字幕走这条路：文本字幕与外挂 .sup 都由本程序自己绘制，
+    /// 此时不该再去问系统要字幕帧，否则会和本程序画的那一份叠在一起。
+    /// 关闭字幕（没有活动轨）时同样为 false，界面层据此直接不画，
+    /// 这样关掉字幕立刻生效，不必等下一次系统字幕帧变化。
+    /// </summary>
+    public bool IsPlatformImageSubtitleActive =>
+        activeSubtitleTrack is not null &&
+        activeSubtitleTrack.TimedMetadataKind == TimedMetadataKind.ImageSubtitle;
 
     public async Task LoadExternalSubtitleAsync(StorageFile subtitleFile)
     {
@@ -1820,6 +1920,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Notify($"已加载 PGS 字幕：{subtitleFile.Name}（{document.FrameCount} 帧）");
         if (activateWhenAdded)
         {
+            // 本程序自绘的 PGS 要独占字幕层：先把系统正在呈现的字幕轨全部关掉，
+            // 否则上一轨仍会被系统画一份，与本程序这一份叠成两行字幕。
+            // DetachSubtitleTrack 会清空 activeSubtitleTrack / activePgsSubtitleDocument，
+            // 因此必须先调用再赋值。本轨不依赖系统的呈现模式：帧由位置轮询驱动。
+            DetachSubtitleTrack();
             activeSubtitleTrack = track;
             activePgsSubtitleDocument = document;
             activePgsFrameIndex = -2;
@@ -2067,8 +2172,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         playbackItem.AudioTracks.SelectedIndex = index;
         ShowChrome();
         AudioTrack track = playbackItem.AudioTracks[index];
-        string name = string.IsNullOrWhiteSpace(track.Label) ? $"音轨 {index + 1}" : track.Label;
-        Notify($"已切换到{name}");
+        string name = DescribeAudioTrack(track, index);
+        // 用户主动选择时不阻止，但必须说明这条音轨不会有声音，否则会被当成播放器故障。
+        bool decodable = IsAudioTrackDecodable(track);
+        Notify(decodable ? $"已切换到{name}" : $"已切换到{name}（系统无解码器，不会有声音）", !decodable);
     }
 
     public void SelectSubtitleTrack(int index)
@@ -2420,6 +2527,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         DurationText = FormatTime(naturalDuration);
         MediaWidth = sender.PlaybackSession.NaturalVideoWidth;
         MediaHeight = sender.PlaybackSession.NaturalVideoHeight;
+        // 容器默认音轨可能是系统无法解码的那一条（如 TrueHD），此时必须改选，否则整个文件都是静音。
+        ApplyDecodableAudioTrack();
         OnPropertyChanged(nameof(OutroMarkerText));
         double target = Math.Max(Settings.SkipIntroSeconds, pendingResumePosition);
         if (sender.PlaybackSession.CanSeek && target > 0 && target < naturalDuration.TotalSeconds - 5)
